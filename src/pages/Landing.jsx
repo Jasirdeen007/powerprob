@@ -12,7 +12,7 @@ import {
   Zap
 } from "lucide-react";
 
-function Landing({ mode, onEnterApp, onShowLogin, onShowSignup, onBackHome, onAuthSubmit }) {
+function Landing({ mode, onEnterApp, onShowLogin, onShowSignup, onBackHome, onAuthSubmit, authPending, authError }) {
   const isAuthMode = mode === "login" || mode === "signup";
 
   return (
@@ -22,11 +22,6 @@ function Landing({ mode, onEnterApp, onShowLogin, onShowSignup, onBackHome, onAu
           <span className="landing-logo"><BatteryCharging size={24} /></span>
           <strong>PowerProbe</strong>
         </div>
-        <nav className="landing-links" aria-label="Primary">
-          <a href="#features">Product</a>
-          <a href="#usecases">Use cases</a>
-          <a href="#docs">Docs</a>
-        </nav>
         <div className="landing-actions">
           <button className="landing-btn ghost" onClick={onShowLogin} type="button">
             <UserRound size={16} /> Login
@@ -39,7 +34,14 @@ function Landing({ mode, onEnterApp, onShowLogin, onShowSignup, onBackHome, onAu
 
       <main className="landing-main">
         {isAuthMode ? (
-          <AuthPanel mode={mode} onBackHome={onBackHome} onAuthSubmit={onAuthSubmit} onSwitchMode={mode === "login" ? onShowSignup : onShowLogin} />
+          <AuthPanel
+            mode={mode}
+            onBackHome={onBackHome}
+            onAuthSubmit={onAuthSubmit}
+            onSwitchMode={mode === "login" ? onShowSignup : onShowLogin}
+            authPending={authPending}
+            authError={authError}
+          />
         ) : (
           <Hero onEnterApp={onEnterApp} />
         )}
@@ -97,12 +99,11 @@ function PreviewMetric({ icon: Icon, label, value }) {
   );
 }
 
-function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode }) {
+function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, authError }) {
   const [form, setForm] = useState({
     name: "",
     email: "",
-    password: "",
-    role: "User"
+    password: ""
   });
   const isSignup = mode === "signup";
 
@@ -114,8 +115,11 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode }) {
     event.preventDefault();
     const fallbackName = form.email ? form.email.split("@")[0] : "Battery Test User";
     onAuthSubmit({
+      mode: isSignup ? "signup" : "login",
       name: isSignup ? form.name.trim() || fallbackName : fallbackName,
-      role: form.role
+      email: form.email,
+      password: form.password,
+      role: "User"
     });
   }
 
@@ -127,7 +131,8 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode }) {
       <form className="auth-card" onSubmit={handleSubmit}>
         <div>
           <h1>{isSignup ? "Create account" : "Login"}</h1>
-          <p>{isSignup ? "Create a demo account to enter the dashboard." : "Use any email and password for this frontend demo."}</p>
+          <p>{isSignup ? "Create a demo account to enter the dashboard." : "Use email and password for this."}</p>
+          {authError && <p>{authError}</p>}
         </div>
 
         {isSignup && (
@@ -135,7 +140,7 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode }) {
             Name
             <span>
               <UserRound size={17} />
-              <input value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder="Battery Test User" />
+              <input value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder="User name" />
             </span>
           </label>
         )}
@@ -156,18 +161,8 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode }) {
           </span>
         </label>
 
-        <label>
-          Role
-          <select value={form.role} onChange={(event) => updateField("role", event.target.value)}>
-            <option>User</option>
-            <option>Technician</option>
-            <option>Engineer</option>
-            <option>Manager</option>
-          </select>
-        </label>
-
-        <button className="landing-btn primary large" type="submit">
-          {isSignup ? "Create account" : "Login"} <ArrowRight size={17} />
+        <button className="landing-btn primary large" type="submit" disabled={authPending}>
+          {authPending ? "Please wait..." : (isSignup ? "Create account" : "Login")} <ArrowRight size={17} />
         </button>
 
         <button className="auth-switch" onClick={onSwitchMode} type="button">

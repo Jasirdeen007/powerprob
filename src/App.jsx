@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import { appUser, droneProfiles } from "./data/appConfig";
-import { firebaseEnabled, loadFirebaseData, subscribeLiveReadings } from "./firebaseClient";
+import {
+  authEnabled,
+  createFirebaseAccount,
+  firebaseEnabled,
+  loadFirebaseData,
+  signInFirebaseAccount,
+  signOutFirebaseAccount,
+  subscribeAuthState,
+  subscribeLiveReadings
+} from "./firebaseClient";
 import localDemoData from "./demo-data.json";
 import Dashboard from "./pages/Dashboard";
 import BatteryEntry from "./pages/BatteryEntry";
@@ -12,32 +21,64 @@ import Reports from "./pages/Reports";
 import { clamp, createDroneProfileSession } from "./lib/battery";
 
 function App() {
-  const [data, setData] = useState(null);
+  const initialBattery = localDemoData.batteries[0]?.batteryId ?? "B0047";
+  const [data, setData] = useState(localDemoData);
   const [authView, setAuthView] = useState("landing");
   const [activePage, setActivePage] = useState("dashboard");
-  const [selectedBattery, setSelectedBattery] = useState("B0047");
-  const [dashboardBattery, setDashboardBattery] = useState("B0047");
+  const [selectedBattery, setSelectedBattery] = useState(initialBattery);
+  const [dashboardBattery, setDashboardBattery] = useState(initialBattery);
   const [selectedProfileId, setSelectedProfileId] = useState(droneProfiles[0].id);
   const [streamIndex, setStreamIndex] = useState(0);
   const [currentUser, setCurrentUser] = useState(appUser);
+  const [authPending, setAuthPending] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [firebaseReady, setFirebaseReady] = useState(false);
 
   useEffect(() => {
+    let timeoutId;
+    let cancelled = false;
+
     async function loadData() {
-      let payload = null;
-      if (firebaseEnabled) {
-        try {
-          payload = await loadFirebaseData();
-        } catch (error) {
-          console.warn("Firebase load failed, falling back to local demo data.", error);
-        }
+      if (!firebaseEnabled) return;
+
+      try {
+        const timeout = new Promise((_, reject) => {
+          timeoutId = window.setTimeout(() => reject(new Error("Firebase data load timed out.")), 2500);
+        });
+        const payload = await Promise.race([loadFirebaseData(), timeout]);
+        if (cancelled || !payload || payload.testSessions.length === 0) return;
+        setData(payload);
+        setFirebaseReady(true);
+        const initialBatteryId = payload.batteries[0]?.batteryId ?? initialBattery;
+        setSelectedBattery(initialBatteryId);
+        setDashboardBattery(initialBatteryId);
+      } catch (error) {
+        console.warn("Firebase load failed, using bundled demo data.", error);
+      } finally {
+        if (timeoutId) window.clearTimeout(timeoutId);
       }
-      if (!payload || payload.testSessions.length === 0) payload = localDemoData;
-      setData(payload);
-      const initialBattery = payload.batteries[0]?.batteryId ?? "B0047";
-      setSelectedBattery(initialBattery);
-      setDashboardBattery(initialBattery);
     }
+
     loadData();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authEnabled) return undefined;
+    return subscribeAuthState((user) => {
+      if (!user) return;
+      setCurrentUser({
+        ...appUser,
+        name: user.displayName || user.email?.split("@")[0] || appUser.name,
+        role: appUser.role
+      });
+      setAuthView("app");
+      setActivePage("dashboard");
+    });
   }, []);
 
   const defaultLiveBattery = useMemo(() => {
@@ -68,24 +109,58 @@ function App() {
   }, [defaultLiveBattery, live]);
 
   useEffect(() => {
-    if (!firebaseEnabled) return undefined;
+    if (!firebaseReady) return undefined;
     return subscribeLiveReadings((liveReadings) => {
       if (Object.keys(liveReadings).length === 0) return;
       setData((current) => current ? { ...current, liveReadings } : current);
     });
-  }, []);
+  }, [firebaseReady]);
 
-  function handleAuthSubmit(userDetails) {
-    setCurrentUser({
-      ...appUser,
-      name: userDetails.name || appUser.name,
-      role: userDetails.role || appUser.role
-    });
-    setAuthView("app");
-    setActivePage("dashboard");
+  async function handleAuthSubmit(userDetails) {
+    setAuthError("");
+    setAuthPending(true);
+
+    try {
+      const fallbackName = userDetails.email ? userDetails.email.split("@")[0] : appUser.name;
+
+      if (authEnabled) {
+        if (userDetails.mode === "signup") {
+          const user = await createFirebaseAccount(userDetails);
+          setCurrentUser({
+            ...appUser,
+            name: user.displayName || userDetails.name || fallbackName,
+            role: appUser.role
+          });
+        } else {
+          const user = await signInFirebaseAccount(userDetails);
+          setCurrentUser({
+            ...appUser,
+            name: user.displayName || fallbackName,
+            role: appUser.role
+          });
+        }
+      } else {
+        setCurrentUser({
+          ...appUser,
+          name: userDetails.name || fallbackName,
+          role: appUser.role
+        });
+      }
+
+      setAuthView("app");
+      setActivePage("dashboard");
+    } catch (error) {
+      console.error(error);
+      setAuthError(error instanceof Error ? error.message : "Authentication failed.");
+    } finally {
+      setAuthPending(false);
+    }
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    if (authEnabled) {
+      await signOutFirebaseAccount();
+    }
     setAuthView("landing");
     setCurrentUser(appUser);
     setActivePage("dashboard");
@@ -100,6 +175,8 @@ function App() {
         onShowSignup={() => setAuthView("signup")}
         onBackHome={() => setAuthView("landing")}
         onAuthSubmit={handleAuthSubmit}
+        authPending={authPending}
+        authError={authError}
       />
     );
   }
