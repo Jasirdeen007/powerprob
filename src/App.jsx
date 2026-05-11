@@ -5,6 +5,7 @@ import { firebaseEnabled, loadFirebaseData, subscribeLiveReadings } from "./fire
 import localDemoData from "./demo-data.json";
 import Dashboard from "./pages/Dashboard";
 import BatteryEntry from "./pages/BatteryEntry";
+import Landing from "./pages/Landing";
 import Profiles from "./pages/Profiles";
 import Traceability from "./pages/Traceability";
 import Reports from "./pages/Reports";
@@ -12,12 +13,13 @@ import { clamp, createDroneProfileSession } from "./lib/battery";
 
 function App() {
   const [data, setData] = useState(null);
+  const [authView, setAuthView] = useState("landing");
   const [activePage, setActivePage] = useState("dashboard");
   const [selectedBattery, setSelectedBattery] = useState("B0047");
   const [dashboardBattery, setDashboardBattery] = useState("B0047");
   const [selectedProfileId, setSelectedProfileId] = useState(droneProfiles[0].id);
   const [streamIndex, setStreamIndex] = useState(0);
-  const currentUser = appUser;
+  const [currentUser, setCurrentUser] = useState(appUser);
 
   useEffect(() => {
     async function loadData() {
@@ -73,6 +75,35 @@ function App() {
     });
   }, []);
 
+  function handleAuthSubmit(userDetails) {
+    setCurrentUser({
+      ...appUser,
+      name: userDetails.name || appUser.name,
+      role: userDetails.role || appUser.role
+    });
+    setAuthView("app");
+    setActivePage("dashboard");
+  }
+
+  function handleLogout() {
+    setAuthView("landing");
+    setCurrentUser(appUser);
+    setActivePage("dashboard");
+  }
+
+  if (authView !== "app") {
+    return (
+      <Landing
+        mode={authView}
+        onEnterApp={() => setAuthView("login")}
+        onShowLogin={() => setAuthView("login")}
+        onShowSignup={() => setAuthView("signup")}
+        onBackHome={() => setAuthView("landing")}
+        onAuthSubmit={handleAuthSubmit}
+      />
+    );
+  }
+
   if (!data || !live) {
     return <main className="loading">Loading battery smoke demo...</main>;
   }
@@ -127,7 +158,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar activePage={activePage} onPageChange={setActivePage} currentUser={currentUser} />
+      <Sidebar activePage={activePage} onPageChange={setActivePage} currentUser={currentUser} onLogout={handleLogout} />
       <main className="content">
         {activePage === "dashboard" && (
           <Dashboard

@@ -38,7 +38,7 @@ async function commitInChunks(db, writes, chunkSize = 450) {
 
 async function main() {
   if (!fs.existsSync(demoPath)) {
-    throw new Error("Run `npm run generate:data` before seeding Firebase.");
+    throw new Error("Missing public/demo-data.json. Keep the bundled demo data before seeding Firebase.");
   }
 
   const data = JSON.parse(fs.readFileSync(demoPath, "utf8"));
