@@ -1,105 +1,128 @@
-# PowerProbe Battery Analytics
+# Battery Analytics Smoke Demo
 
-React + Firebase demo for a Cloud-Based Battery Test Analytics & Traceability Platform.
+React smoke implementation for the Cloud-Based Battery Test Analytics & Traceability Platform.
 
-PowerProbe is designed for a drone/battery testing workflow where telemetry is uploaded to Firebase, visualized on a live dashboard, and preserved as battery test history for traceability and reporting.
+## Current Scope
 
-## Current App Flow
+- NASA battery dataset normalization
+- Local demo data generated from `battery_dataset/cleaned_dataset`
+- Dashboard with animated live readings
+- Demo login controls for Technician, Engineer, and Manager
+- Battery detail entry form
+- Battery traceability timeline
+- Rule-based compliance checks
+- CSV/JSON report export
+- Optional Firebase seed path
 
-1. The app opens on the landing page.
-2. The user clicks `Login`, `Get started`, or `Open dashboard`.
-3. The frontend demo login/signup form is shown.
-4. After login/signup, the user enters the dashboard shell.
-5. The dashboard loads Firebase data if credentials are configured.
-6. If Firebase is unavailable, the app uses bundled demo telemetry from `src/demo-data.json`.
-7. Users can view live charts, add battery config, simulate drone profile tests, inspect traceability, and export reports.
-
-The current login is frontend-only. Any email/password can enter the app. Real authentication is listed under future implementation.
-
-## Implemented Features
-
-- Landing page with demo login/signup flow
-- Sidebar dashboard layout after login
-- Live Battery Dashboard with voltage, current, temperature, SOC, and SOH visuals
-- Firebase client support for Firestore and Realtime Database
-- Local fallback demo data using bundled `demo-data.json`
-- Battery Entry page for adding battery configuration during the browser session
-- Drone Profiles page for simulated drone load tests
-- Traceability page for per-battery test history
-- Reports page with CSV and JSON export
-- Logout action returning the user to the landing page
-- Firebase seed script for uploading bundled demo data
-
-## Pages
-
-**Landing / Login**
-
-Shows the product entry screen and demo login/signup forms. This currently updates local React state only.
-
-**Dashboard**
-
-Shows live telemetry as KPI cards and charts. It reads from Firebase when available, otherwise from bundled demo data.
-
-**Battery Entry**
-
-Lets the user enter battery ID, chemistry, manufacturer, test location, nominal capacity, and initial status. Entries are currently stored in local React state.
-
-**Drone Profiles**
-
-Creates simulated drone mission tests. Running a profile generates voltage, current, temperature, SOH, and status values, then adds the result to dashboard data and traceability history.
-
-**Traceability**
-
-Shows test sessions for the selected battery with date, source, SOH, max temperature, and average voltage.
-
-**Reports**
-
-Exports the selected test session as CSV or JSON.
-
-## Data Flow
-
-Firebase path:
-
-- Firestore `batteries`: battery detail records
-- Firestore `testSessions`: session metadata and summaries
-- Firestore `testReadings`: detailed readings for each session
-- Realtime Database `/liveReadings`: live stream used by the dashboard
-
-Fallback path:
-
-- `src/demo-data.json`: imported directly by the React app
-- `public/demo-data.json`: used by the Firebase seed script
-
-The raw NASA dataset folder and archive are not required for the app anymore. The bundled demo JSON is kept because it gives the dashboard a large fallback dataset without shipping the raw source dataset.
+ML prediction, RUL modeling, TFT, and anomaly detection are intentionally left for the next iteration.
 
 ## Run Locally
 
 ```bash
 npm install
+npm run generate:data
 npm run dev
 ```
 
-Open the Vite URL shown in the terminal, usually:
+Open the Vite URL shown in the terminal, usually `http://127.0.0.1:5173/`.
+
+## How The Data Runs
+
+1. `scripts/generate-demo-data.js` reads `battery_dataset/cleaned_dataset/metadata.csv`.
+2. It selects five NASA battery IDs: `B0047`, `B0048`, `B0045`, `B0046`, and `B0005`.
+3. For each battery, it takes a limited number of charge/discharge sessions.
+4. For every selected session, it opens the matching CSV file from `battery_dataset/cleaned_dataset/data`.
+5. It samples readings from the CSV so the browser is not overloaded.
+6. It writes normalized data to:
+   - `public/demo-data.json`
+   - `src/demo-data.json`
+7. The React app imports `src/demo-data.json` as its fallback dataset.
+8. The dashboard animates one selected session as if it is a live Firebase stream.
+
+The generated structure contains:
+
+- `batteries`: one summary record per battery
+- `testSessions`: metadata, summary, and sampled readings for each test
+- `liveReadings`: one simulated realtime stream
+- `complianceRules`: fixed threshold rules for this iteration
+
+## SOC And SOH Calculation
+
+This iteration does not use ML.
+
+SOC is estimated from voltage using a simple normalized voltage rule:
 
 ```txt
-http://127.0.0.1:5173/
+SOC = ((Voltage - 3.0) / 1.25) * 100
 ```
 
-Build for production:
+Then it is clamped between `0` and `100`.
+
+So:
+
+- `3.0V` is treated as roughly `0%`
+- `4.25V` is treated as roughly `100%`
+- Values outside this range are capped
+
+This is only a demo approximation. In the next iteration, SOC should come from a better battery model or ML/service-side calculation.
+
+SOH is estimated from capacity:
+
+```txt
+SOH = (Current Capacity / Initial Capacity) * 100
+```
+
+The first known capacity for that battery is treated as the initial capacity.
+
+## Login Controls
+
+The current login is a frontend smoke-demo role switch, not full Firebase Authentication yet.
+
+Roles:
+
+- `Technician`: Dashboard, Battery Entry, Dataset Seed, Traceability
+- `Engineer`: Dashboard, Battery Entry, Dataset Seed, Traceability, Compliance, Reports
+- `Manager`: Dashboard, Traceability, Compliance, Reports
+
+When real Firebase Auth is added, these same roles should move into Firestore user documents or custom claims.
+
+## Battery Entry
+
+Use the `Battery Entry` page to add or update a battery record.
+
+Fields:
+
+- Battery ID
+- Chemistry
+- Manufacturer
+- Test location
+- Nominal capacity
+- Initial status
+
+For now, added batteries live in React state during the current browser session. The next Firebase step is to write these entries into the `batteries` Firestore collection.
+
+## Firebase Seed
+
+Copy `.env.example` to `.env`, fill the Firebase web app values, then run:
 
 ```bash
-npm run build
+npm run firebase:seed
 ```
 
-Preview the production build:
+This writes:
 
-```bash
-npm run preview
-```
+- `batteries` collection
+- `testSessions` collection
+- `testReadings` collection
+- `/liveReadings` in Realtime Database
 
-## Firebase Setup
+Without Firebase config, the app uses bundled NASA-derived local demo data.
 
-Create a `.env` file in the project root beside `package.json`:
+## Where To Paste Firebase Credentials
+
+Create a file named `.env` in the project root beside `package.json`.
+
+Paste your Firebase web app config like this:
 
 ```txt
 VITE_FIREBASE_API_KEY=your_api_key
@@ -113,76 +136,4 @@ VITE_FIREBASE_DATABASE_URL=https://your_project-default-rtdb.firebaseio.com
 
 After adding `.env`, restart the dev server.
 
-## Firebase Seed
-
-To upload bundled demo data to Firebase:
-
-```bash
-npm run firebase:seed
-```
-
-This writes:
-
-- `batteries`
-- `testSessions`
-- `testReadings`
-- Realtime Database `/liveReadings`
-
-## SOC And SOH
-
-This version uses simple frontend/demo calculations, not production battery models.
-
-SOC is estimated from voltage:
-
-```txt
-SOC = ((Voltage - 3.0) / 1.25) * 100
-```
-
-The result is clamped between `0` and `100`.
-
-SOH is read from session summaries or updated by the drone profile simulation. Production SOH should be calculated using validated battery models or backend ML.
-
-## Project Structure
-
-```txt
-src/
-  App.jsx
-  main.jsx
-  demo-data.json
-  firebaseClient.js
-  styles.css
-  components/
-    ChartBlock.jsx
-    LineChart.jsx
-    MetricCard.jsx
-    Sidebar.jsx
-  data/
-    appConfig.js
-  lib/
-    battery.js
-  pages/
-    BatteryEntry.jsx
-    Dashboard.jsx
-    Landing.jsx
-    Profiles.jsx
-    Reports.jsx
-    Traceability.jsx
-```
-
-## Future Implementation
-
-- Replace frontend demo login with Firebase Authentication
-- Add role-based access using Firestore user documents or Firebase custom claims
-- Save Battery Entry records directly to Firestore
-- Save generated Drone Profile sessions to Firestore and Realtime Database
-- Connect the real drone/device upload pipeline to Firebase
-- Add backend validation for incoming telemetry payloads
-- Add battery/device registration linked to authenticated users
-- Add real SOC, SOH, and RUL models
-- Add anomaly detection for overheating, voltage sag, abnormal current spikes, and capacity degradation
-- Add warning/critical notifications through email, dashboard alerts, or messaging
-- Add filters, search, and date ranges in Traceability
-- Add PDF report generation
-- Store uploaded raw test files and generated reports in Firebase Storage
-- Add automated tests for login flow, Firebase loading, dashboard rendering, traceability, and report export
-- Add route-based navigation if the app grows beyond the current in-memory page switcher
+The website checks these values automatically. If all values exist, it tries Firebase first. If Firebase fails or values are missing, it falls back to local NASA demo data.

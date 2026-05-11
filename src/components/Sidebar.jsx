@@ -7,7 +7,7 @@ import {
   ShieldCheck
 } from "lucide-react";
 
-function Sidebar({ activePage, onPageChange, currentUser, onLogout }) {
+function Sidebar({ activePage, onPageChange, currentUser }) {
   const items = [
     ["dashboard", Gauge, "Dashboard"],
     ["entry", PlusCircle, "Battery Entry"],
@@ -41,7 +41,6 @@ function Sidebar({ activePage, onPageChange, currentUser, onLogout }) {
       <div className="role-card">
         <span>{currentUser.name}</span>
         <strong>{currentUser.role}</strong>
-        <button className="logout-button" onClick={onLogout} type="button">Logout</button>
       </div>
     </aside>
   );

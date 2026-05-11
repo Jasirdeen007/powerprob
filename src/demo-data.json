@@ -1,6 +1,6 @@
-﻿{
+{
   "generatedAt": "2026-05-08T10:39:54.881Z",
-  "source": "bundled battery telemetry demo sample",
+  "source": "NASA battery dataset cleaned CSV sample",
   "batteries": [
     {
       "batteryId": "B0047",
