@@ -175,6 +175,36 @@ h3 {
   gap: 14px;
 }
 
+.running-strip {
+  border: 1px solid #c9d7ea;
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: 1.2fr 1.8fr 0.8fr;
+  gap: 12px;
+  background: #f8fbff;
+}
+
+.running-strip div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.running-strip span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.running-strip strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #0f172a;
+  font-size: 18px;
+}
+
 .metric,
 .panel {
   background: #ffffff;
@@ -315,6 +345,113 @@ h3 {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
+}
+
+.profiles-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 420px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.profile-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-card {
+  width: 100%;
+  min-height: 92px;
+  border: 1px solid #dfe5ee;
+  border-radius: 8px;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 5px 12px;
+  align-items: center;
+  background: #ffffff;
+  color: #18202d;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-card:hover,
+.profile-card.selected {
+  border-color: #246bfe;
+  box-shadow: 0 8px 24px rgba(24, 32, 45, 0.08);
+}
+
+.profile-card .profile-icon {
+  grid-row: span 2;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #eaf0ff;
+  color: #2451cc;
+}
+
+.profile-card strong,
+.profile-card span {
+  min-width: 0;
+}
+
+.profile-card > span:last-child {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.profile-detail {
+  display: grid;
+  gap: 16px;
+}
+
+.profile-specs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.action-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.action-list article {
+  border: 1px solid #e5eaf1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+  background: #ffffff;
+}
+
+.action-list strong {
+  color: #18202d;
+  font-size: 14px;
+}
+
+.action-list span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.start-test {
+  min-height: 42px;
+  justify-self: start;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  background: #111827;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 700;
 }
 
 .fleet-item {
@@ -546,8 +683,11 @@ h3 {
 
 @media (max-width: 1100px) {
   .metrics-grid,
+  .running-strip,
   .chart-grid,
   .fleet-grid,
+  .profile-specs,
+  .action-list,
   .steps,
   .entry-form,
   .entry-list {
@@ -573,8 +713,12 @@ h3 {
   }
 
   .metrics-grid,
+  .running-strip,
   .chart-grid,
   .fleet-grid,
+  .profiles-layout,
+  .profile-specs,
+  .action-list,
   .steps,
   .seed-summary,
   .entry-form,
