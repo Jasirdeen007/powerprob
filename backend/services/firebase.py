@@ -1,0 +1,95 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import firebase_admin
+from firebase_admin import credentials, db, firestore
+
+from services.config import settings
+
+
+def firebase_available() -> bool:
+    return bool(settings.firebase_service_account_path and settings.firebase_database_url)
+
+
+def get_firebase_app():
+    if not firebase_available():
+        return None
+
+    if firebase_admin._apps:
+        return firebase_admin.get_app()
+
+    service_account_path = Path(settings.firebase_service_account_path)
+    if not service_account_path.exists():
+        return None
+
+    cred = credentials.Certificate(str(service_account_path))
+    return firebase_admin.initialize_app(
+        cred,
+        {"databaseURL": settings.firebase_database_url},
+    )
+
+
+def get_firestore_client():
+    app = get_firebase_app()
+    return firestore.client(app=app) if app else None
+
+
+def write_latest_telemetry(session_id: str, packet: dict[str, Any]) -> bool:
+    app = get_firebase_app()
+    if not app:
+        return False
+
+    db.reference(f"telemetry/{session_id}/latest", app=app).set(packet)
+    return True
+
+
+def append_telemetry(session_id: str, packet: dict[str, Any]) -> bool:
+    client = get_firestore_client()
+    if not client:
+        return False
+
+    packet_id = packet["timestamp"].replace(":", "-").replace(".", "-")
+    client.collection("sessions").document(session_id).collection("telemetry").document(packet_id).set(packet)
+    return True
+
+
+def save_session(session_id: str, session: dict[str, Any]) -> bool:
+    client = get_firestore_client()
+    if not client:
+        return False
+
+    client.collection("sessions").document(session_id).set(session, merge=True)
+    return True
+
+
+def update_session(session_id: str, fields: dict[str, Any]) -> bool:
+    client = get_firestore_client()
+    if not client:
+        return False
+
+    client.collection("sessions").document(session_id).set(fields, merge=True)
+    return True
+
+
+def list_sessions() -> list[dict[str, Any]]:
+    client = get_firestore_client()
+    if not client:
+        return []
+
+    docs = client.collection("sessions").order_by("started_at", direction=firestore.Query.DESCENDING).stream()
+    return [doc.to_dict() for doc in docs]
+
+
+def query_historical(session_id: str, start: str | None, end: str | None) -> list[dict[str, Any]]:
+    client = get_firestore_client()
+    if not client:
+        return []
+
+    query = client.collection("sessions").document(session_id).collection("telemetry")
+    if start:
+        query = query.where("timestamp", ">=", start)
+    if end:
+        query = query.where("timestamp", "<=", end)
+    return [doc.to_dict() for doc in query.order_by("timestamp").stream()]
