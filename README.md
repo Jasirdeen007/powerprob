@@ -83,7 +83,7 @@ Open the Vite URL shown in the terminal, usually:
 
 ```txt
 http://127.0.0.1:5173/
-```
+```b=
 
 Build for production:
 

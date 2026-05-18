@@ -4,9 +4,12 @@ import {
   ArrowLeft,
   ArrowRight,
   BatteryCharging,
+  Eye,
+  EyeOff,
   Gauge,
   LineChart,
   LockKeyhole,
+  LoaderCircle,
   Mail,
   UserRound,
   Zap
@@ -57,10 +60,10 @@ function Hero({ onEnterApp }) {
         <span className="landing-eyebrow"><Zap size={15} /> Cloud battery telemetry</span>
         <h1>
           Battery analytics
-          <span>built for traceability</span>
+          <span>for live and historical insights</span>
         </h1>
         <p>
-          Monitor live drone battery telemetry, inspect per-session charts, and keep battery history readable as test data grows.
+          Monitor live battery telemetry, inspect KPI charts, and explore historical records through flexible filters and CSV export.
         </p>
         <button className="landing-btn primary large" onClick={onEnterApp} type="button">
           Open dashboard <ArrowRight size={17} />
@@ -81,7 +84,7 @@ function Hero({ onEnterApp }) {
           <LineChart size={56} />
           <div>
             <strong>Realtime stream</strong>
-            <span>Firebase telemetry updates charts and traceability records.</span>
+            <span>Firebase telemetry updates dashboard and history analytics instantly.</span>
           </div>
         </div>
       </section>
@@ -105,6 +108,7 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
     email: "",
     password: ""
   });
+  const [showPassword, setShowPassword] = useState(false);
   const isSignup = mode === "signup";
 
   function updateField(field, value) {
@@ -132,7 +136,7 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
         <div>
           <h1>{isSignup ? "Create account" : "Login"}</h1>
           <p>{isSignup ? "Create a demo account to enter the dashboard." : "Use email and password for this."}</p>
-          {authError && <p>{authError}</p>}
+          {authError && <p className="auth-error">{authError}</p>}
         </div>
 
         {isSignup && (
@@ -157,12 +161,38 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
           Password
           <span>
             <LockKeyhole size={17} />
-            <input type="password" value={form.password} onChange={(event) => updateField("password", event.target.value)} placeholder="Password" required />
+            <input
+              type={showPassword ? "text" : "password"}
+              value={form.password}
+              onChange={(event) => updateField("password", event.target.value)}
+              placeholder="Password"
+              required
+            />
+            <button
+              className="password-toggle"
+              type="button"
+              onClick={() => setShowPassword((current) => !current)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              title={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </span>
+          <small className="password-visibility">Password visible: {showPassword ? "Yes" : "No"}</small>
         </label>
 
         <button className="landing-btn primary large" type="submit" disabled={authPending}>
-          {authPending ? "Please wait..." : (isSignup ? "Create account" : "Login")} <ArrowRight size={17} />
+          {authPending ? (
+            <>
+              <LoaderCircle size={17} className="button-spinner" />
+              Processing...
+            </>
+          ) : (
+            <>
+              {isSignup ? "Create account" : "Login"}
+              <ArrowRight size={17} />
+            </>
+          )}
         </button>
 
         <button className="auth-switch" onClick={onSwitchMode} type="button">

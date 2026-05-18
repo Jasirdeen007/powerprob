@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "./components/Sidebar";
-import { appUser, droneProfiles } from "./data/appConfig";
+import { appUser } from "./data/appConfig";
 import {
   authEnabled,
   createFirebaseAccount,
@@ -13,26 +13,46 @@ import {
 } from "./firebaseClient";
 import localDemoData from "./demo-data.json";
 import Dashboard from "./pages/Dashboard";
-import BatteryEntry from "./pages/BatteryEntry";
+import HistoryAnalytics from "./pages/historyAnalytics";
 import Landing from "./pages/Landing";
-import Profiles from "./pages/Profiles";
-import Traceability from "./pages/Traceability";
-import Reports from "./pages/Reports";
-import { clamp, createDroneProfileSession } from "./lib/battery";
+import { clamp } from "./lib/battery";
+
+function mapAuthError(error, mode) {
+  const fallback = "Authentication failed. Please try again.";
+  if (!error || typeof error !== "object") return fallback;
+
+  const firebaseCode = "code" in error && typeof error.code === "string" ? error.code : "";
+
+  if (mode === "login") {
+    if (firebaseCode === "auth/user-not-found") return "Account not found. Please sign up first.";
+    if (firebaseCode === "auth/invalid-credential" || firebaseCode === "auth/wrong-password") {
+      return "Invalid account or password. Please check your details.";
+    }
+    if (firebaseCode === "auth/invalid-email") return "Invalid email format. Please enter a valid email address.";
+  }
+
+  if (mode === "signup") {
+    if (firebaseCode === "auth/email-already-in-use") return "This email is already registered. Please login instead.";
+    if (firebaseCode === "auth/weak-password") return "Password is too weak. Please use at least 6 characters.";
+  }
+
+  if (firebaseCode === "auth/network-request-failed") return "Network error. Please check your connection and try again.";
+
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 function App() {
   const initialBattery = localDemoData.batteries[0]?.batteryId ?? "B0047";
   const [data, setData] = useState(localDemoData);
   const [authView, setAuthView] = useState("landing");
   const [activePage, setActivePage] = useState("dashboard");
-  const [selectedBattery, setSelectedBattery] = useState(initialBattery);
   const [dashboardBattery, setDashboardBattery] = useState(initialBattery);
-  const [selectedProfileId, setSelectedProfileId] = useState(droneProfiles[0].id);
   const [streamIndex, setStreamIndex] = useState(0);
   const [currentUser, setCurrentUser] = useState(appUser);
   const [authPending, setAuthPending] = useState(false);
   const [authError, setAuthError] = useState("");
   const [firebaseReady, setFirebaseReady] = useState(false);
+  const availablePages = useMemo(() => ["dashboard", "history-analytics"], []);
 
   useEffect(() => {
     let timeoutId;
@@ -50,7 +70,6 @@ function App() {
         setData(payload);
         setFirebaseReady(true);
         const initialBatteryId = payload.batteries[0]?.batteryId ?? initialBattery;
-        setSelectedBattery(initialBatteryId);
         setDashboardBattery(initialBatteryId);
       } catch (error) {
         console.warn("Firebase load failed, using bundled demo data.", error);
@@ -65,7 +84,7 @@ function App() {
       cancelled = true;
       if (timeoutId) window.clearTimeout(timeoutId);
     };
-  }, []);
+  }, [initialBattery]);
 
   useEffect(() => {
     if (!authEnabled) return undefined;
@@ -112,9 +131,15 @@ function App() {
     if (!firebaseReady) return undefined;
     return subscribeLiveReadings((liveReadings) => {
       if (Object.keys(liveReadings).length === 0) return;
-      setData((current) => current ? { ...current, liveReadings } : current);
+      setData((current) => (current ? { ...current, liveReadings } : current));
     });
   }, [firebaseReady]);
+
+  useEffect(() => {
+    if (!availablePages.includes(activePage)) {
+      setActivePage("dashboard");
+    }
+  }, [activePage, availablePages]);
 
   async function handleAuthSubmit(userDetails) {
     setAuthError("");
@@ -151,7 +176,7 @@ function App() {
       setActivePage("dashboard");
     } catch (error) {
       console.error(error);
-      setAuthError(error instanceof Error ? error.message : "Authentication failed.");
+      setAuthError(mapAuthError(error, userDetails.mode));
     } finally {
       setAuthPending(false);
     }
@@ -185,8 +210,7 @@ function App() {
     return <main className="loading">Loading battery smoke demo...</main>;
   }
 
-  const selectedSession = data.testSessions.find((session) => session.batteryId === selectedBattery) ?? data.testSessions[0];
-  const dashboardSession = data.testSessions.find((session) => session.batteryId === (live.batteryId ?? dashboardBattery)) ?? selectedSession;
+  const dashboardSession = data.testSessions.find((session) => session.batteryId === (live.batteryId ?? dashboardBattery)) ?? data.testSessions[0];
   const point = live.stream[streamIndex % live.stream.length] ?? live.stream[0];
   const livePoint = {
     ...live,
@@ -194,44 +218,6 @@ function App() {
     soc: Math.round(clamp(((point.voltage - 3) / 1.25) * 100, 0, 100)),
     status: point.temperature >= 45 ? "critical" : point.temperature >= 38 ? "warning" : live.status
   };
-
-  function handleAddBattery(battery) {
-    setData((current) => {
-      const exists = current.batteries.some((item) => item.batteryId === battery.batteryId);
-      const batteries = exists
-        ? current.batteries.map((item) => item.batteryId === battery.batteryId ? { ...item, ...battery } : item)
-        : [battery, ...current.batteries];
-      return { ...current, batteries };
-    });
-    setSelectedBattery(battery.batteryId);
-    setActivePage("traceability");
-  }
-
-  function handleStartProfileTest(profile, battery) {
-    if (!battery) return;
-    setData((current) => {
-      const latestBattery = current.batteries.find((item) => item.batteryId === battery.batteryId) ?? battery;
-      const sequence = current.testSessions.filter((session) => session.batteryId === latestBattery.batteryId).length;
-      const synthetic = createDroneProfileSession(profile, latestBattery, sequence);
-      const batteries = current.batteries.some((item) => item.batteryId === latestBattery.batteryId)
-        ? current.batteries.map((item) => item.batteryId === latestBattery.batteryId ? synthetic.battery : item)
-        : [synthetic.battery, ...current.batteries];
-      return {
-        ...current,
-        source: `${current.source} + local drone profiles`,
-        batteries,
-        testSessions: [synthetic.session, ...current.testSessions],
-        liveReadings: {
-          ...current.liveReadings,
-          [latestBattery.batteryId]: synthetic.liveReading
-        }
-      };
-    });
-    setSelectedBattery(battery.batteryId);
-    setDashboardBattery(battery.batteryId);
-    setStreamIndex(0);
-    setActivePage("dashboard");
-  }
 
   return (
     <div className="app-shell">
@@ -247,22 +233,7 @@ function App() {
             selectedSession={dashboardSession}
           />
         )}
-        {activePage === "profiles" && (
-          <Profiles
-            profiles={droneProfiles}
-            selectedProfileId={selectedProfileId}
-            onSelectProfile={setSelectedProfileId}
-            selectedBattery={selectedBattery}
-            batteries={data.batteries}
-            onBatteryChange={setSelectedBattery}
-            onStartTest={handleStartProfileTest}
-          />
-        )}
-        {activePage === "entry" && <BatteryEntry data={data} onAddBattery={handleAddBattery} />}
-        {activePage === "traceability" && (
-          <Traceability data={data} selectedBattery={selectedBattery} onBatteryChange={setSelectedBattery} />
-        )}
-        {activePage === "reports" && <Reports selectedSession={selectedSession} />}
+        {activePage === "history-analytics" && <HistoryAnalytics data={data} />}
       </main>
     </div>
   );

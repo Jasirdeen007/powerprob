@@ -1,19 +1,13 @@
 import {
   BatteryCharging,
-  FileSpreadsheet,
-  Gauge,
-  History,
-  PlusCircle,
-  ShieldCheck
+  ChartLine,
+  Gauge
 } from "lucide-react";
 
 function Sidebar({ activePage, onPageChange, currentUser, onLogout }) {
   const items = [
     ["dashboard", Gauge, "Dashboard"],
-    ["entry", PlusCircle, "Battery Entry"],
-    ["profiles", ShieldCheck, "Drone Profiles"],
-    ["traceability", History, "Traceability"],
-    ["reports", FileSpreadsheet, "Reports"]
+    ["history-analytics", ChartLine, "History Analytics"]
   ];
 
   return (
