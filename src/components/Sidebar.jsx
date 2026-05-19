@@ -10,10 +10,7 @@ import {
 function Sidebar({ activePage, onPageChange, currentUser, onLogout }) {
   const items = [
     ["dashboard", Gauge, "Dashboard"],
-    ["entry", PlusCircle, "Battery Entry"],
-    ["profiles", ShieldCheck, "Drone Profiles"],
-    ["traceability", History, "Traceability"],
-    ["reports", FileSpreadsheet, "Reports"]
+    ["traceability", History, "History Analytics"]
   ];
 
   return (

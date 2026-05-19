@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "./components/Sidebar";
-import { appUser, droneProfiles } from "./data/appConfig";
+import { appUser } from "./data/appConfig";
 import {
   authEnabled,
   createFirebaseAccount,
@@ -13,12 +13,9 @@ import {
 } from "./firebaseClient";
 import localDemoData from "./demo-data.json";
 import Dashboard from "./pages/Dashboard";
-import BatteryEntry from "./pages/BatteryEntry";
 import Landing from "./pages/Landing";
-import Profiles from "./pages/Profiles";
-import Traceability from "./pages/Traceability";
-import Reports from "./pages/Reports";
-import { clamp, createDroneProfileSession } from "./lib/battery";
+import HistoryAnalytics from "./pages/historyAnalytics";
+import { clamp } from "./lib/battery";
 
 function App() {
   const initialBattery = localDemoData.batteries[0]?.batteryId ?? "B0047";
@@ -27,7 +24,6 @@ function App() {
   const [activePage, setActivePage] = useState("dashboard");
   const [selectedBattery, setSelectedBattery] = useState(initialBattery);
   const [dashboardBattery, setDashboardBattery] = useState(initialBattery);
-  const [selectedProfileId, setSelectedProfileId] = useState(droneProfiles[0].id);
   const [streamIndex, setStreamIndex] = useState(0);
   const [currentUser, setCurrentUser] = useState(appUser);
   const [authPending, setAuthPending] = useState(false);
@@ -195,44 +191,6 @@ function App() {
     status: point.temperature >= 45 ? "critical" : point.temperature >= 38 ? "warning" : live.status
   };
 
-  function handleAddBattery(battery) {
-    setData((current) => {
-      const exists = current.batteries.some((item) => item.batteryId === battery.batteryId);
-      const batteries = exists
-        ? current.batteries.map((item) => item.batteryId === battery.batteryId ? { ...item, ...battery } : item)
-        : [battery, ...current.batteries];
-      return { ...current, batteries };
-    });
-    setSelectedBattery(battery.batteryId);
-    setActivePage("traceability");
-  }
-
-  function handleStartProfileTest(profile, battery) {
-    if (!battery) return;
-    setData((current) => {
-      const latestBattery = current.batteries.find((item) => item.batteryId === battery.batteryId) ?? battery;
-      const sequence = current.testSessions.filter((session) => session.batteryId === latestBattery.batteryId).length;
-      const synthetic = createDroneProfileSession(profile, latestBattery, sequence);
-      const batteries = current.batteries.some((item) => item.batteryId === latestBattery.batteryId)
-        ? current.batteries.map((item) => item.batteryId === latestBattery.batteryId ? synthetic.battery : item)
-        : [synthetic.battery, ...current.batteries];
-      return {
-        ...current,
-        source: `${current.source} + local drone profiles`,
-        batteries,
-        testSessions: [synthetic.session, ...current.testSessions],
-        liveReadings: {
-          ...current.liveReadings,
-          [latestBattery.batteryId]: synthetic.liveReading
-        }
-      };
-    });
-    setSelectedBattery(battery.batteryId);
-    setDashboardBattery(battery.batteryId);
-    setStreamIndex(0);
-    setActivePage("dashboard");
-  }
-
   return (
     <div className="app-shell">
       <Sidebar activePage={activePage} onPageChange={setActivePage} currentUser={currentUser} onLogout={handleLogout} />
@@ -247,22 +205,9 @@ function App() {
             selectedSession={dashboardSession}
           />
         )}
-        {activePage === "profiles" && (
-          <Profiles
-            profiles={droneProfiles}
-            selectedProfileId={selectedProfileId}
-            onSelectProfile={setSelectedProfileId}
-            selectedBattery={selectedBattery}
-            batteries={data.batteries}
-            onBatteryChange={setSelectedBattery}
-            onStartTest={handleStartProfileTest}
-          />
-        )}
-        {activePage === "entry" && <BatteryEntry data={data} onAddBattery={handleAddBattery} />}
         {activePage === "traceability" && (
-          <Traceability data={data} selectedBattery={selectedBattery} onBatteryChange={setSelectedBattery} />
+          <HistoryAnalytics data={data} selectedBattery={selectedBattery} onBatteryChange={setSelectedBattery} />
         )}
-        {activePage === "reports" && <Reports selectedSession={selectedSession} />}
       </main>
     </div>
   );
