@@ -13,46 +13,22 @@ import {
 } from "./firebaseClient";
 import localDemoData from "./demo-data.json";
 import Dashboard from "./pages/Dashboard";
-import HistoryAnalytics from "./pages/historyAnalytics";
 import Landing from "./pages/Landing";
+import HistoryAnalytics from "./pages/historyAnalytics";
 import { clamp } from "./lib/battery";
-
-function mapAuthError(error, mode) {
-  const fallback = "Authentication failed. Please try again.";
-  if (!error || typeof error !== "object") return fallback;
-
-  const firebaseCode = "code" in error && typeof error.code === "string" ? error.code : "";
-
-  if (mode === "login") {
-    if (firebaseCode === "auth/user-not-found") return "Account not found. Please sign up first.";
-    if (firebaseCode === "auth/invalid-credential" || firebaseCode === "auth/wrong-password") {
-      return "Invalid account or password. Please check your details.";
-    }
-    if (firebaseCode === "auth/invalid-email") return "Invalid email format. Please enter a valid email address.";
-  }
-
-  if (mode === "signup") {
-    if (firebaseCode === "auth/email-already-in-use") return "This email is already registered. Please login instead.";
-    if (firebaseCode === "auth/weak-password") return "Password is too weak. Please use at least 6 characters.";
-  }
-
-  if (firebaseCode === "auth/network-request-failed") return "Network error. Please check your connection and try again.";
-
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 function App() {
   const initialBattery = localDemoData.batteries[0]?.batteryId ?? "B0047";
   const [data, setData] = useState(localDemoData);
   const [authView, setAuthView] = useState("landing");
   const [activePage, setActivePage] = useState("dashboard");
+  const [selectedBattery, setSelectedBattery] = useState(initialBattery);
   const [dashboardBattery, setDashboardBattery] = useState(initialBattery);
   const [streamIndex, setStreamIndex] = useState(0);
   const [currentUser, setCurrentUser] = useState(appUser);
   const [authPending, setAuthPending] = useState(false);
   const [authError, setAuthError] = useState("");
   const [firebaseReady, setFirebaseReady] = useState(false);
-  const availablePages = useMemo(() => ["dashboard", "history-analytics"], []);
 
   useEffect(() => {
     let timeoutId;
@@ -70,6 +46,7 @@ function App() {
         setData(payload);
         setFirebaseReady(true);
         const initialBatteryId = payload.batteries[0]?.batteryId ?? initialBattery;
+        setSelectedBattery(initialBatteryId);
         setDashboardBattery(initialBatteryId);
       } catch (error) {
         console.warn("Firebase load failed, using bundled demo data.", error);
@@ -84,7 +61,7 @@ function App() {
       cancelled = true;
       if (timeoutId) window.clearTimeout(timeoutId);
     };
-  }, [initialBattery]);
+  }, []);
 
   useEffect(() => {
     if (!authEnabled) return undefined;
@@ -131,15 +108,9 @@ function App() {
     if (!firebaseReady) return undefined;
     return subscribeLiveReadings((liveReadings) => {
       if (Object.keys(liveReadings).length === 0) return;
-      setData((current) => (current ? { ...current, liveReadings } : current));
+      setData((current) => current ? { ...current, liveReadings } : current);
     });
   }, [firebaseReady]);
-
-  useEffect(() => {
-    if (!availablePages.includes(activePage)) {
-      setActivePage("dashboard");
-    }
-  }, [activePage, availablePages]);
 
   async function handleAuthSubmit(userDetails) {
     setAuthError("");
@@ -176,7 +147,7 @@ function App() {
       setActivePage("dashboard");
     } catch (error) {
       console.error(error);
-      setAuthError(mapAuthError(error, userDetails.mode));
+      setAuthError(error instanceof Error ? error.message : "Authentication failed.");
     } finally {
       setAuthPending(false);
     }
@@ -210,7 +181,8 @@ function App() {
     return <main className="loading">Loading battery smoke demo...</main>;
   }
 
-  const dashboardSession = data.testSessions.find((session) => session.batteryId === (live.batteryId ?? dashboardBattery)) ?? data.testSessions[0];
+  const selectedSession = data.testSessions.find((session) => session.batteryId === selectedBattery) ?? data.testSessions[0];
+  const dashboardSession = data.testSessions.find((session) => session.batteryId === (live.batteryId ?? dashboardBattery)) ?? selectedSession;
   const point = live.stream[streamIndex % live.stream.length] ?? live.stream[0];
   const livePoint = {
     ...live,
@@ -233,7 +205,9 @@ function App() {
             selectedSession={dashboardSession}
           />
         )}
-        {activePage === "history-analytics" && <HistoryAnalytics data={data} />}
+        {activePage === "traceability" && (
+          <HistoryAnalytics data={data} selectedBattery={selectedBattery} onBatteryChange={setSelectedBattery} />
+        )}
       </main>
     </div>
   );

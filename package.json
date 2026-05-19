@@ -10,12 +10,15 @@
     "firebase:seed": "node scripts/push-demo-to-firebase.js"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^5.0.0",
+    "@vitejs/plugin-react": "^6.0.2",
     "firebase": "^12.0.0",
-    "vite": "^7.0.0",
+    "lucide-react": "^0.468.0",
+    "prop-types": "^15.8.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "lucide-react": "^0.468.0"
-  },
-  "devDependencies": {}
+    "react-gauge-chart": "^0.5.1",
+    "react-is": "^19.2.6",
+    "recharts": "^3.8.1",
+    "vite": "^8.0.13"
+  }
 }

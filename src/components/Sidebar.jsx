@@ -1,13 +1,16 @@
 import {
   BatteryCharging,
-  ChartLine,
-  Gauge
+  FileSpreadsheet,
+  Gauge,
+  History,
+  PlusCircle,
+  ShieldCheck
 } from "lucide-react";
 
 function Sidebar({ activePage, onPageChange, currentUser, onLogout }) {
   const items = [
     ["dashboard", Gauge, "Dashboard"],
-    ["history-analytics", ChartLine, "History Analytics"]
+    ["traceability", History, "History Analytics"]
   ];
 
   return (

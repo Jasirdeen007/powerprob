@@ -70,8 +70,8 @@ function toInputDateTime(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function HistoryAnalytics({ data }) {
-  const [batteryFilter, setBatteryFilter] = useState("ALL");
+function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
+  const [batteryFilter, setBatteryFilter] = useState(selectedBattery || "ALL");
   const [preset, setPreset] = useState("NONE");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -264,7 +264,10 @@ function HistoryAnalytics({ data }) {
           <div className="history-filter-card battery-card">
             <label>
               Battery Type
-              <select value={batteryFilter} onChange={(event) => setBatteryFilter(event.target.value)}>
+              <select value={batteryFilter} onChange={(event) => {
+                setBatteryFilter(event.target.value);
+                if (onBatteryChange) onBatteryChange(event.target.value);
+              }}>
                 <option value="ALL">All batteries</option>
                 {(data?.batteries ?? []).map((battery) => (
                   <option key={battery.batteryId} value={battery.batteryId}>{battery.batteryId}</option>
