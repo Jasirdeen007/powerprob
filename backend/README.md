@@ -77,6 +77,39 @@ python scripts/mock_pi.py
 
 It connects to `/ws/pi`, sends fake telemetry every second, and prints server acknowledgements.
 
+## Send Data To Raspberry Pi Over WebSocket
+
+Start the backend so the Pi can reach it on your network:
+
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+On the Raspberry Pi, keep this websocket client running:
+
+```bash
+python scripts/pi_command_client.py ws://YOUR_LAPTOP_IP:8000/ws/pi
+```
+
+From the backend machine, send any command JSON to the connected Pi:
+
+```bash
+python scripts/send_to_pi.py --base-url http://127.0.0.1:8000 --type CUSTOM_COMMAND --session-id SESSION_TEST --command "{\"relay\":1,\"pwm\":70}"
+```
+
+The backend delivers this to the Pi over the active `/ws/pi` websocket:
+
+```json
+{
+  "type": "CUSTOM_COMMAND",
+  "session_id": "SESSION_TEST",
+  "command": {
+    "relay": 1,
+    "pwm": 70
+  }
+}
+```
+
 ## Start Session
 
 ```json

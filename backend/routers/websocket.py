@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import logging
 
+from models.command import CommandPayload
 from models.telemetry import TelemetryPacket, WebSocketMessage
 from services import firebase
 from services.metrics import enrich_packet
@@ -24,6 +25,13 @@ async def process_telemetry(payload: dict):
 async def receive_telemetry(packet: TelemetryPacket):
     data = await process_telemetry(packet.model_dump(mode="json"))
     return {"status": "accepted", "packet": data}
+
+
+@router.post("/pi/command")
+async def send_pi_command(command: CommandPayload):
+    payload = command.model_dump()
+    sent = await pi_ws_manager.send_command(payload)
+    return {"sent": sent, "command": payload}
 
 
 @router.websocket("/ws/pi")

@@ -101,3 +101,15 @@ def test_telemetry_valid_and_invalid():
 
     status, _ = request("POST", "/telemetry", {"session_id": "SESSION_TEST"})
     assert 400 <= status < 500
+
+
+def test_pi_command_without_connected_pi():
+    payload = {
+        "type": "CUSTOM_COMMAND",
+        "session_id": "SESSION_TEST",
+        "command": {"relay": 1},
+    }
+    status, body = request("POST", "/pi/command", payload)
+    assert status == 200
+    assert body["sent"] is False
+    assert body["command"] == payload

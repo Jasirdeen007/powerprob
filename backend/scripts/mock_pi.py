@@ -1,11 +1,14 @@
 import asyncio
+import json
+import os
 import random
+import sys
 from datetime import datetime
 
 import websockets
 
 
-SERVER_URL = "ws://127.0.0.1:8000/ws/pi"
+SERVER_URL = sys.argv[1] if len(sys.argv) > 1 else os.getenv("POWERPROBE_WS_URL", "ws://127.0.0.1:8000/ws/pi")
 SESSION_ID = "SESSION_MOCK_PI_B0047"
 
 
@@ -38,20 +41,20 @@ def make_packet(index: int) -> dict:
 
 
 async def main():
-    async with websockets.connect(SERVER_URL) as websocket:
-        print(f"Connected to {SERVER_URL}")
-        index = 0
-        while True:
-            packet = make_packet(index)
-            await websocket.send(
-                __import__("json").dumps(
-                    {"type": "telemetry", "payload": packet}
-                )
-            )
-            reply = await websocket.recv()
-            print(reply)
-            index += 1
-            await asyncio.sleep(1)
+    try:
+        async with websockets.connect(SERVER_URL, open_timeout=15) as websocket:
+            print(f"Connected to {SERVER_URL}")
+            index = 0
+            while True:
+                packet = make_packet(index)
+                await websocket.send(json.dumps({"type": "telemetry", "payload": packet}))
+                reply = await websocket.recv()
+                print(reply)
+                index += 1
+                await asyncio.sleep(1)
+    except TimeoutError:
+        print(f"Timed out connecting to {SERVER_URL}")
+        print("Check backend is running with --host 0.0.0.0, laptop IP is correct, and firewall allows port 8000.")
 
 
 if __name__ == "__main__":
