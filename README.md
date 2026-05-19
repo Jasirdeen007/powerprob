@@ -161,12 +161,9 @@ src/
   lib/
     battery.js
   pages/
-    BatteryEntry.jsx
     Dashboard.jsx
     Landing.jsx
-    Profiles.jsx
-    Reports.jsx
-    Traceability.jsx
+    HistoryAnalytics.jsx
 ```
 
 ## Future Implementation
