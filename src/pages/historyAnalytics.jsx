@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Download, Filter, RotateCcw } from "lucide-react";
+import { Download, Filter, RotateCcw, BarChart3 } from "lucide-react";
+import DashboardCharts from "../components/DashboardCharts";
 
 const MODE_OPTIONS = ["CHARGE", "DISCHARGE", "IDLE"];
 const PRESETS = [
@@ -76,6 +77,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [selectedModes, setSelectedModes] = useState(MODE_OPTIONS);
+  const [showDashboard, setShowDashboard] = useState(false);
 
   const records = useMemo(() => {
     const allRows = (data?.testSessions ?? []).flatMap((session) => {
@@ -219,9 +221,14 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
           <h1>Battery Analytics</h1>
           <p>Filter, inspect, and export historical battery telemetry from all recorded sessions.</p>
         </div>
-        <button type="button" className="history-export" onClick={exportCsv}>
-          <Download size={16} /> Export CSV
-        </button>
+        <div className="history-hero-actions">
+          <button type="button" className="history-visualization" onClick={() => setShowDashboard(!showDashboard)}>
+            <BarChart3 size={16} /> {showDashboard ? "Hide" : "Show"} Visualization
+          </button>
+          <button type="button" className="history-export" onClick={exportCsv}>
+            <Download size={16} /> Export CSV
+          </button>
+        </div>
       </header>
 
       <section className="history-stats" aria-label="Analytics summary">
@@ -239,11 +246,13 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
         </article>
       </section>
 
-      <section className="panel history-controls">
+      {showDashboard && filteredRecords.length > 0 && (
+        <section className="panel history-controls visualization-filters">
+          <div className="filters-wrapper">
         <div className="history-controls-head">
           <div className="history-controls-title">
-            <h2><Filter size={16} /> Filters</h2>
-            <span>Use battery, date, and mode filters together for precise analytics.</span>
+            <h2><Filter size={18} /> Filter Configuration</h2>
+            <span>Adjust filters to refine visualization insights</span>
           </div>
           <button type="button" className="history-reset" onClick={resetFilters} disabled={!hasFilters}>
             <RotateCcw size={15} /> Reset
@@ -343,7 +352,129 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
             </div>
           </fieldset>
         </div>
-      </section>
+          </div>
+        </section>
+      )}
+
+      {showDashboard && filteredRecords.length === 0 && (
+        <div className="visualization-prompt">
+          <div className="prompt-content">
+            <BarChart3 size={32} />
+            <h3>No Data to Visualize</h3>
+            <p>Apply filters to see battery analytics visualization based on your selections.</p>
+            <div className="prompt-tips">
+              <span>💡 Tip: Select a battery, date range, or operation mode to filter data</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDashboard && filteredRecords.length > 0 && <DashboardCharts records={filteredRecords} />}
+
+      {!showDashboard && (
+        <section className="panel history-controls">
+          <div className="history-controls-head">
+            <div className="history-controls-title">
+              <h2><Filter size={16} /> Filters</h2>
+              <span>Use battery, date, and mode filters together for precise analytics.</span>
+            </div>
+            <button type="button" className="history-reset" onClick={resetFilters} disabled={!hasFilters}>
+              <RotateCcw size={15} /> Reset
+            </button>
+          </div>
+
+          {activeFilterBadges.length > 0 ? (
+            <div className="history-active-filters" aria-label="Active filters">
+              {activeFilterBadges.map((badge) => (
+                <span key={badge.key} className="history-filter-badge">
+                  {badge.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="history-filter-grid">
+            <div className="history-filter-card battery-card">
+              <label>
+                Battery Type
+                <select value={batteryFilter} onChange={(event) => setBatteryFilter(event.target.value)}>
+                  <option value="ALL">All batteries</option>
+                  {(data?.batteries ?? []).map((battery) => (
+                    <option key={battery.batteryId} value={battery.batteryId}>{battery.batteryId}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <fieldset className="history-filter-card date-card">
+              <legend>Date Range</legend>
+              <div className="preset-row">
+                {PRESETS.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={preset === item.key ? "active" : ""}
+                    onClick={() => setDatePreset(item.key)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              {preset === "custom" ? (
+                <div className="custom-date-row">
+                  <label>
+                    Start
+                    <input
+                      type="datetime-local"
+                      value={toInputDateTime(customStart)}
+                      onChange={(event) => {
+                        setPreset("custom");
+                        setCustomStart(event.target.value);
+                      }}
+                      aria-label="Custom start date"
+                    />
+                  </label>
+                  <label>
+                    End
+                    <input
+                      type="datetime-local"
+                      value={toInputDateTime(customEnd)}
+                      onChange={(event) => {
+                        setPreset("custom");
+                        setCustomEnd(event.target.value);
+                      }}
+                      aria-label="Custom end date"
+                    />
+                  </label>
+                </div>
+              ) : null}
+            </fieldset>
+
+            <fieldset className="history-filter-card mode-card">
+              <legend>Mode</legend>
+              <div className="mode-actions" aria-label="Mode quick actions">
+                <button type="button" onClick={() => setModeSelection(MODE_OPTIONS)}>All</button>
+                <button type="button" onClick={() => setModeSelection([])}>None</button>
+              </div>
+              <div className="mode-row">
+                {MODE_OPTIONS.map((mode) => (
+                  <label
+                    key={mode}
+                    className={`checkbox-pill ${selectedModes.includes(mode) ? "checked" : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedModes.includes(mode)}
+                      onChange={() => toggleMode(mode)}
+                    />
+                    {mode}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+        </section>
+      )}
 
       <section className="panel history-results">
         <div className="panel-head">
