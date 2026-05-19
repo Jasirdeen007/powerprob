@@ -4,6 +4,7 @@ import logging
 from models.command import CommandPayload
 from models.session import SessionEndRequest, SessionStartRequest
 from services import firebase
+from services.profile_commands import build_profile_command
 from services.websocket_manager import pi_ws_manager
 
 logger = logging.getLogger(__name__)
@@ -29,13 +30,15 @@ async def start_session(request: SessionStartRequest) -> dict:
     local_sessions[session_id] = record
     firebase.save_session(session_id, record)
 
-    command = CommandPayload(session_id=session_id).model_dump()
+    profile_command = build_profile_command(request.config.drone_type)
+    command = CommandPayload(session_id=session_id, command=profile_command).model_dump()
     command_sent = await pi_ws_manager.send_command(command)
     logger.info("Started session %s for battery %s command_sent=%s", session_id, record["battery_id"], command_sent)
     return {
         "session_id": session_id,
         "status": "started",
         "command_sent": command_sent,
+        "command": command,
     }
 
 

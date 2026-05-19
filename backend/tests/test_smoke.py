@@ -37,7 +37,10 @@ def test_health_ok():
 def test_profiles_ok():
     status, body = request("GET", "/profiles")
     assert status == 200
-    assert len(body["profiles"]) == 3
+    assert len(body["profiles"]) == 4
+    assert body["profiles"][0]["name"] == "Surveillance Drone"
+    assert body["profiles"][0]["command"]["columns"] == ["timestamp_s", "vref_V"]
+    assert body["profiles"][0]["command"]["sample_count"] == 301
 
 
 def test_session_start_valid_and_invalid():
@@ -47,13 +50,18 @@ def test_session_start_valid_and_invalid():
             "chemistry": "Li-ion",
             "cell_count": 3,
             "capacity_ah": 2.2,
-            "drone_type": "SURVEILLANCE",
+            "drone_type": "Surveillance Drone",
             "discharge_profile": "PULSE",
         },
     }
     status, body = request("POST", "/session/start", valid)
     assert status == 200
     assert body["session_id"].startswith("SESSION_")
+    assert body["command"]["type"] == "START_PROFILE"
+    assert body["command"]["command"]["profile_name"] == "Surveillance Drone"
+    assert body["command"]["command"]["sample_count"] == 301
+    assert body["command"]["command"]["control_points"][0] == {"timestamp_s": 0, "vref_V": 0.0}
+    assert body["command"]["command"]["control_points"][-1] == {"timestamp_s": 300, "vref_V": 0.00278}
 
     status, _ = request("POST", "/session/start", {"battery_id": ""})
     assert 400 <= status < 500

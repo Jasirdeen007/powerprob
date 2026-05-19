@@ -10,7 +10,7 @@ FastAPI backend for the PowerProbe battery test workflow.
 - Calculates simple derived metrics: SOC, SOH, RUL, and IR.
 - Writes latest telemetry to Firebase RTDB at `/telemetry/{sessionId}/latest`.
 - Appends packet history to Firestore at `sessions/{sessionId}/telemetry`.
-- Keeps drone profile command payloads blank until hardware data is finalized.
+- Sends selected drone profile commands to the Raspberry Pi with `timestamp_s` and `vref_V` control points.
 
 ## Setup
 
@@ -91,6 +91,31 @@ On the Raspberry Pi, keep this websocket client running:
 python scripts/pi_command_client.py ws://YOUR_LAPTOP_IP:8000/ws/pi
 ```
 
+For startup on Raspberry Pi boot, copy `scripts/pi_command_client.py` and
+`scripts/powerprobe-pi.service.example` to `/home/pi/powerprobe`, edit
+`YOUR_BACKEND_IP`, then install the service:
+
+```bash
+cd /home/pi/powerprobe
+python3 -m pip install --user websockets
+nano powerprobe-pi.service.example
+sudo cp powerprobe-pi.service.example /etc/systemd/system/powerprobe-pi.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now powerprobe-pi.service
+sudo systemctl status powerprobe-pi.service
+```
+
+Live logs on the Pi:
+
+```bash
+journalctl -u powerprobe-pi.service -f
+```
+
+When `/session/start` runs, the Pi receives `START_PROFILE`, saves the latest
+command to `/home/pi/powerprobe/latest_profile.json`, and iterates through each
+`timestamp_s` / `vref_V` point. Replace `apply_vref()` in
+`pi_command_client.py` with the final DAC, PWM, or GPIO output code.
+
 From the backend machine, send any command JSON to the connected Pi:
 
 ```bash
@@ -119,18 +144,47 @@ The backend delivers this to the Pi over the active `/ws/pi` websocket:
     "chemistry": "Li-ion",
     "cell_count": 3,
     "capacity_ah": 2.2,
-    "drone_type": "SURVEILLANCE",
+    "drone_type": "Surveillance Drone",
     "discharge_profile": "PULSE"
   }
 }
 ```
 
-The command sent to Raspberry Pi is currently:
+The profile names accepted by the backend match the frontend:
+
+```txt
+Surveillance Drone
+Delivery Heavy Lift
+FPV Racing Drone
+Inspection Quad
+```
+
+For now, all four profiles use the same backend dataset:
+
+```txt
+backend/data/drone_control_profile.csv
+```
+
+Only the first and third CSV columns are sent to the Pi: `timestamp_s` and `vref_V`.
+
+The command sent to Raspberry Pi is:
 
 ```json
 {
   "type": "START_PROFILE",
   "session_id": "SESSION_ID",
-  "command": {}
+  "command": {
+    "profile_id": "surveillance-drone",
+    "profile_name": "Surveillance Drone",
+    "source_file": "drone_control_profile.csv",
+    "sample_count": 301,
+    "columns": ["timestamp_s", "vref_V"],
+    "control_points": [
+      { "timestamp_s": 0, "vref_V": 0.0 },
+      { "timestamp_s": 1, "vref_V": 0.016 }
+    ]
+  }
 }
 ```
+
+The real command contains all 301 samples from `timestamp_s` 0 through 300.

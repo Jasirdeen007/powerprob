@@ -4,7 +4,15 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-DroneType = Literal["AGRI", "SURVEILLANCE", "FPV"]
+DroneType = Literal[
+    "AGRI",
+    "SURVEILLANCE",
+    "FPV",
+    "Surveillance Drone",
+    "Delivery Heavy Lift",
+    "FPV Racing Drone",
+    "Inspection Quad",
+]
 
 
 class BatteryConfig(BaseModel):
@@ -24,6 +32,7 @@ class SessionStartResponse(BaseModel):
     session_id: str
     status: str
     command_sent: bool
+    command: dict
 
 
 class SessionEndRequest(BaseModel):
