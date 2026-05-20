@@ -9,7 +9,9 @@ import websockets
 
 
 SERVER_URL = sys.argv[1] if len(sys.argv) > 1 else os.getenv("POWERPROBE_WS_URL", "ws://127.0.0.1:8000/ws/pi")
-SESSION_ID = "SESSION_MOCK_PI_B0047"
+active_session_id = None
+active_profile = "IDLE"
+paused = True
 
 
 def make_packet(index: int) -> dict:
@@ -20,10 +22,10 @@ def make_packet(index: int) -> dict:
     battery_temp = round(33 + index * 0.08 + random.uniform(-0.3, 0.5), 1)
 
     return {
-        "session_id": SESSION_ID,
+        "session_id": active_session_id,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "mode": "DISCHARGE",
-        "profile": "PULSE",
+        "profile": active_profile,
         "pack_voltage": round(cell1 + cell2 + cell3, 2),
         "cell_voltage": {
             "cell1": cell1,
@@ -40,18 +42,49 @@ def make_packet(index: int) -> dict:
     }
 
 
+async def receive_commands(websocket):
+    global active_profile, active_session_id, paused
+
+    async for raw in websocket:
+        message = json.loads(raw)
+        message_type = message.get("type")
+        if message_type == "START_PROFILE":
+            active_session_id = message.get("session_id") or active_session_id
+            command = message.get("command", {})
+            active_profile = command.get("profile_name", command.get("profile_id", active_profile))
+            paused = False
+            print(f"START_PROFILE received session={active_session_id} profile={active_profile}")
+        elif message_type == "PAUSE_PROFILE":
+            paused = True
+            print("PAUSE_PROFILE received")
+        elif message_type == "RESUME_PROFILE":
+            if active_session_id:
+                paused = False
+            print("RESUME_PROFILE received")
+        elif message_type == "STOP_PROFILE":
+            active_session_id = None
+            active_profile = "IDLE"
+            paused = True
+            print("STOP_PROFILE received")
+        else:
+            print(raw)
+
+
+async def send_telemetry(websocket):
+    index = 0
+    while True:
+        if active_session_id and not paused:
+            packet = make_packet(index)
+            await websocket.send(json.dumps({"type": "telemetry", "payload": packet}))
+            index += 1
+        await asyncio.sleep(1)
+
+
 async def main():
     try:
         async with websockets.connect(SERVER_URL, open_timeout=15) as websocket:
             print(f"Connected to {SERVER_URL}")
-            index = 0
-            while True:
-                packet = make_packet(index)
-                await websocket.send(json.dumps({"type": "telemetry", "payload": packet}))
-                reply = await websocket.recv()
-                print(reply)
-                index += 1
-                await asyncio.sleep(1)
+            await asyncio.gather(receive_commands(websocket), send_telemetry(websocket))
     except TimeoutError:
         print(f"Timed out connecting to {SERVER_URL}")
         print("Check backend is running with --host 0.0.0.0, laptop IP is correct, and firewall allows port 8000.")

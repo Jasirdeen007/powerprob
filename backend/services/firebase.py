@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import logging
 
 import firebase_admin
 from firebase_admin import credentials, db, firestore
 
 from services.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def firebase_available() -> bool:
@@ -37,59 +40,83 @@ def get_firestore_client():
 
 
 def write_latest_telemetry(session_id: str, packet: dict[str, Any]) -> bool:
-    app = get_firebase_app()
-    if not app:
-        return False
+    try:
+        app = get_firebase_app()
+        if not app:
+            return False
 
-    db.reference(f"telemetry/{session_id}/latest", app=app).set(packet)
-    return True
+        db.reference(f"telemetry/{session_id}/latest", app=app).set(packet)
+        return True
+    except Exception as error:
+        logger.warning("Failed to write latest telemetry to Firebase: %s", error)
+        return False
 
 
 def append_telemetry(session_id: str, packet: dict[str, Any]) -> bool:
-    client = get_firestore_client()
-    if not client:
-        return False
+    try:
+        client = get_firestore_client()
+        if not client:
+            return False
 
-    packet_id = packet["timestamp"].replace(":", "-").replace(".", "-")
-    client.collection("sessions").document(session_id).collection("telemetry").document(packet_id).set(packet)
-    return True
+        packet_id = packet["timestamp"].replace(":", "-").replace(".", "-")
+        client.collection("sessions").document(session_id).collection("telemetry").document(packet_id).set(packet)
+        return True
+    except Exception as error:
+        logger.warning("Failed to append telemetry to Firestore: %s", error)
+        return False
 
 
 def save_session(session_id: str, session: dict[str, Any]) -> bool:
-    client = get_firestore_client()
-    if not client:
-        return False
+    try:
+        client = get_firestore_client()
+        if not client:
+            return False
 
-    client.collection("sessions").document(session_id).set(session, merge=True)
-    return True
+        client.collection("sessions").document(session_id).set(session, merge=True)
+        return True
+    except Exception as error:
+        logger.warning("Failed to save session to Firestore: %s", error)
+        return False
 
 
 def update_session(session_id: str, fields: dict[str, Any]) -> bool:
-    client = get_firestore_client()
-    if not client:
-        return False
+    try:
+        client = get_firestore_client()
+        if not client:
+            return False
 
-    client.collection("sessions").document(session_id).set(fields, merge=True)
-    return True
+        client.collection("sessions").document(session_id).set(fields, merge=True)
+        return True
+    except Exception as error:
+        logger.warning("Failed to update session in Firestore: %s", error)
+        return False
 
 
 def list_sessions() -> list[dict[str, Any]]:
-    client = get_firestore_client()
-    if not client:
-        return []
+    try:
+        client = get_firestore_client()
+        if not client:
+            return []
 
-    docs = client.collection("sessions").order_by("started_at", direction=firestore.Query.DESCENDING).stream()
-    return [doc.to_dict() for doc in docs]
+        docs = client.collection("sessions").order_by("started_at", direction=firestore.Query.DESCENDING).stream()
+        return [doc.to_dict() for doc in docs]
+    except Exception as error:
+        logger.warning("Failed to list sessions from Firestore: %s", error)
+        return []
 
 
 def query_historical(session_id: str, start: str | None, end: str | None) -> list[dict[str, Any]]:
-    client = get_firestore_client()
-    if not client:
-        return []
+    try:
+        client = get_firestore_client()
+        if not client:
+            return []
 
-    query = client.collection("sessions").document(session_id).collection("telemetry")
-    if start:
-        query = query.where("timestamp", ">=", start)
-    if end:
-        query = query.where("timestamp", "<=", end)
-    return [doc.to_dict() for doc in query.order_by("timestamp").stream()]
+        query = client.collection("sessions").document(session_id).collection("telemetry")
+        if start:
+            query = query.where("timestamp", ">=", start)
+        if end:
+            query = query.where("timestamp", "<=", end)
+        return [doc.to_dict() for doc in query.order_by("timestamp").stream()]
+    except Exception as error:
+        logger.warning("Failed to query historical telemetry from Firestore: %s", error)
+        return []

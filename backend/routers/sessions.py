@@ -12,8 +12,8 @@ async def create_session(request: SessionStartRequest):
 
 
 @router.post("/session/end")
-def complete_session(request: SessionEndRequest):
-    return end_session(request)
+async def complete_session(request: SessionEndRequest):
+    return await end_session(request)
 
 
 @router.get("/sessions")

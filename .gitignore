@@ -1,7 +1,12 @@
 node_modules/
 dist/
+# Local environment and Firebase credentials
 .env
+.env.local
+.env.*.local
 backend/.env
+backend/.env.local
+backend/.env.*.local
 serviceAccountKey.json
 backend/serviceAccountKey.json
 *.log

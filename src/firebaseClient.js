@@ -40,6 +40,31 @@ function getFirebaseAuth() {
 }
 
 async function readTestSessions(db) {
+  const backendSessionsSnapshot = await getDocs(collection(db, "sessions"));
+  if (!backendSessionsSnapshot.empty) {
+    const sessions = await Promise.all(
+      backendSessionsSnapshot.docs.map(async (sessionDoc) => {
+        const session = sessionDoc.data();
+        const telemetrySnapshot = await getDocs(collection(db, "sessions", sessionDoc.id, "telemetry"));
+        const readings = telemetrySnapshot.docs
+          .map((readingDoc) => backendTelemetryToReading(readingDoc.data(), session.started_at))
+          .filter(Boolean)
+          .sort((a, b) => a.time - b.time);
+
+        return {
+          sessionId: session.session_id ?? sessionDoc.id,
+          batteryId: session.battery_id ?? sessionDoc.id.split("_").at(-1) ?? "UNKNOWN",
+          type: session.config?.discharge_profile ?? "discharge",
+          startTime: session.started_at,
+          status: session.status ?? "running",
+          sourceFile: session.command?.source_file ?? "backend",
+          readings
+        };
+      })
+    );
+    return sessions;
+  }
+
   const sessionsSnapshot = await getDocs(collection(db, "testSessions"));
   const sessions = await Promise.all(
     sessionsSnapshot.docs.map(async (sessionDoc) => {
@@ -56,6 +81,53 @@ async function readTestSessions(db) {
   return sessions;
 }
 
+function backendTelemetryToReading(packet, startedAt) {
+  const timestampMs = new Date(packet.timestamp).getTime();
+  const startedMs = new Date(startedAt ?? packet.timestamp).getTime();
+  if (!Number.isFinite(timestampMs)) return null;
+
+  return {
+    time: Number.isFinite(startedMs) ? Math.max(0, (timestampMs - startedMs) / 1000) : 0,
+    voltage: Number(packet.pack_voltage ?? 0),
+    current: Number(packet.current ?? 0),
+    temperature: Number(packet.temperature?.battery ?? 0),
+    action: packet.event ?? "",
+    timestamp: packet.timestamp
+  };
+}
+
+function inferBatteryId(sessionId) {
+  const parts = String(sessionId ?? "").split("_");
+  return parts.at(-1) || "B0047";
+}
+
+function backendTelemetryToLiveReadings(telemetryBySession) {
+  return Object.fromEntries(
+    Object.entries(telemetryBySession ?? {}).flatMap(([sessionId, value]) => {
+      const packet = value?.latest ?? value;
+      if (!packet || typeof packet !== "object") return [];
+
+      const batteryId = inferBatteryId(packet.session_id ?? sessionId);
+      const reading = backendTelemetryToReading(packet, packet.timestamp);
+      if (!reading) return [];
+
+      return [
+        [
+          batteryId,
+          {
+            batteryId,
+            sessionId: packet.session_id ?? sessionId,
+            mode: packet.mode ?? "DISCHARGE",
+            status: packet.alerts?.length ? "warning" : "healthy",
+            soh: Number(packet.derived?.soh ?? 100),
+            stream: [reading]
+          }
+        ]
+      ];
+    })
+  );
+}
+
 export async function loadFirebaseData() {
   const app = getFirebaseApp();
   if (!app) return null;
@@ -63,10 +135,10 @@ export async function loadFirebaseData() {
   const db = getFirestore(app);
   const rtdb = getDatabase(app);
 
-  const [batteriesSnapshot, testSessions, liveReadingsSnapshot] = await Promise.all([
+  const [batteriesSnapshot, testSessions, backendTelemetrySnapshot] = await Promise.all([
     getDocs(collection(db, "batteries")),
     readTestSessions(db),
-    get(ref(rtdb, "liveReadings"))
+    get(ref(rtdb, "telemetry"))
   ]);
 
   const batteries = batteriesSnapshot.docs.map((batteryDoc) => ({
@@ -74,12 +146,15 @@ export async function loadFirebaseData() {
     ...batteryDoc.data()
   }));
 
+  const backendLiveReadings = backendTelemetryToLiveReadings(
+    backendTelemetrySnapshot.exists() ? backendTelemetrySnapshot.val() ?? {} : {}
+  );
   return {
     source: "firebase",
     generatedAt: new Date().toISOString(),
     batteries,
     testSessions,
-    liveReadings: liveReadingsSnapshot.exists() ? liveReadingsSnapshot.val() ?? {} : {}
+    liveReadings: backendLiveReadings
   };
 }
 
@@ -88,8 +163,8 @@ export function subscribeLiveReadings(onLiveReadings) {
   if (!app) return undefined;
 
   const rtdb = getDatabase(app);
-  return onValue(ref(rtdb, "liveReadings"), (snapshot) => {
-    onLiveReadings(snapshot.val() ?? {});
+  return onValue(ref(rtdb, "telemetry"), (snapshot) => {
+    onLiveReadings(backendTelemetryToLiveReadings(snapshot.val() ?? {}));
   });
 }
 

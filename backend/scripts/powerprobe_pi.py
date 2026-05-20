@@ -21,6 +21,7 @@ active_profile_task: asyncio.Task | None = None
 active_session_id: str | None = None
 active_profile_name = "IDLE"
 latest_vref_v = 0.0
+paused = False
 
 
 def save_latest_profile(state_file: Path, session_id: str, command: dict[str, Any]) -> None:
@@ -71,6 +72,16 @@ async def run_profile(command: dict[str, Any]) -> None:
 
     previous_timestamp = 0.0
     for point in control_points:
+        if not active_session_id:
+            break
+
+        while paused:
+            if not active_session_id:
+                break
+            await asyncio.sleep(0.2)
+        if not active_session_id:
+            break
+
         try:
             timestamp_s = float(point["timestamp_s"])
             vref_v = float(point["vref_V"])
@@ -90,14 +101,14 @@ async def run_profile(command: dict[str, Any]) -> None:
 
 async def telemetry_loop(websocket) -> None:
     while True:
-        if active_session_id:
+        if active_session_id and not paused:
             packet = await read_telemetry(active_session_id)
             await websocket.send(json.dumps({"type": "telemetry", "payload": packet}))
         await asyncio.sleep(TELEMETRY_INTERVAL_SECONDS)
 
 
 async def handle_server_message(websocket, raw: str, state_file: Path) -> None:
-    global active_profile_name, active_profile_task, active_session_id
+    global active_profile_name, active_profile_task, active_session_id, paused
 
     try:
         message = json.loads(raw)
@@ -117,6 +128,7 @@ async def handle_server_message(websocket, raw: str, state_file: Path) -> None:
     if message_type == "START_PROFILE" and session_id:
         active_session_id = session_id
         active_profile_name = str(command.get("profile_name", command.get("profile_id", "PROFILE")))
+        paused = False
         save_latest_profile(state_file, session_id, command)
 
         if active_profile_task and not active_profile_task.done():
@@ -127,6 +139,25 @@ async def handle_server_message(websocket, raw: str, state_file: Path) -> None:
                 print("Previous profile stopped")
 
         active_profile_task = asyncio.create_task(run_profile(command))
+    elif message_type == "PAUSE_PROFILE":
+        paused = True
+        print("Profile paused")
+    elif message_type == "RESUME_PROFILE":
+        if active_session_id:
+            paused = False
+        print("Profile resumed")
+    elif message_type == "STOP_PROFILE":
+        paused = True
+        active_session_id = None
+        active_profile_name = "IDLE"
+        latest_vref_v = 0.0
+        await apply_output(0.0)
+        if active_profile_task and not active_profile_task.done():
+            active_profile_task.cancel()
+            try:
+                await active_profile_task
+            except asyncio.CancelledError:
+                print("Profile stopped")
 
     await websocket.send(
         json.dumps(

@@ -31,6 +31,7 @@ async def start_session(request: SessionStartRequest) -> dict:
     firebase.save_session(session_id, record)
 
     profile_command = build_profile_command(request.config.drone_type)
+    pi_ws_manager.set_active_session(session_id, profile_command["profile_name"])
     command = CommandPayload(session_id=session_id, command=profile_command).model_dump()
     command_sent = await pi_ws_manager.send_command(command)
     logger.info("Started session %s for battery %s command_sent=%s", session_id, record["battery_id"], command_sent)
@@ -42,11 +43,19 @@ async def start_session(request: SessionStartRequest) -> dict:
     }
 
 
-def end_session(request: SessionEndRequest) -> dict:
+async def end_session(request: SessionEndRequest) -> dict:
     ended_at = datetime.now(UTC).isoformat()
     fields = {"status": "completed", "ended_at": ended_at}
     local_sessions.setdefault(request.session_id, {"session_id": request.session_id}).update(fields)
     firebase.update_session(request.session_id, fields)
+    await pi_ws_manager.send_command(
+        CommandPayload(
+            type="STOP_PROFILE",
+            session_id=request.session_id,
+            command={"reason": "session_end"},
+        ).model_dump()
+    )
+    pi_ws_manager.clear_active_session(request.session_id)
     logger.info("Ended session %s", request.session_id)
     return {"session_id": request.session_id, "status": "completed"}
 

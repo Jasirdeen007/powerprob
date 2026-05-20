@@ -5,7 +5,7 @@ import TelemetryChartCard from "../components/TelemetryChartCard";
 import { statusLabel } from "../data/appConfig";
 import { clamp } from "../lib/battery";
 
-function Dashboard({ livePoint, liveStream, streamIndex, selectedSession }) {
+function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, profiles = [], onStartSession, onEndSession, onPauseSession }) {
   const [hideControls, setHideControls] = useState(false);
   const [cRating, setCRating] = useState("25");
   const [batteryType, setBatteryType] = useState("Li-ion");
@@ -16,7 +16,9 @@ function Dashboard({ livePoint, liveStream, streamIndex, selectedSession }) {
 
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [localStreamIndex, setLocalStreamIndex] = useState(0);
+  const [activeSessionId, setActiveSessionId] = useState("");
+  const [sessionPending, setSessionPending] = useState(false);
+  const [sessionError, setSessionError] = useState("");
 
   const fullReadings = liveStream.length > 0 ? liveStream : selectedSession?.readings ?? [];
 
@@ -38,19 +40,7 @@ function Dashboard({ livePoint, liveStream, streamIndex, selectedSession }) {
     }
   }, [droneProfile]);
 
-  useEffect(() => {
-    if (!isRunning || isPaused || fullReadings.length === 0) return;
-    const interval = setInterval(() => {
-      setLocalStreamIndex((prev) => {
-        const next = prev + 1;
-        return next % fullReadings.length;
-      });
-    }, 900);
-    return () => clearInterval(interval);
-  }, [isRunning, isPaused, fullReadings.length]);
-
-  const activeIndex = isRunning ? localStreamIndex : streamIndex;
-  const point = fullReadings[activeIndex % fullReadings.length] ?? fullReadings[0] ?? livePoint;
+  const point = fullReadings.at(-1) ?? fullReadings[0] ?? livePoint;
 
   const activeLivePoint = {
     ...livePoint,
@@ -59,7 +49,7 @@ function Dashboard({ livePoint, liveStream, streamIndex, selectedSession }) {
     status: point.temperature >= 45 ? "critical" : point.temperature >= 38 ? "warning" : livePoint.status
   };
 
-  const readings = fullReadings.slice(0, activeIndex + 1).map((reading, index, list) => {
+  const readings = fullReadings.map((reading, index, list) => {
     const previous = list[index - 1];
     const deltaVoltage = previous ? Math.abs(reading.voltage - previous.voltage) : 0;
     const deltaCurrent = previous ? Math.abs(reading.current - previous.current) : 0;
@@ -91,19 +81,65 @@ function Dashboard({ livePoint, liveStream, streamIndex, selectedSession }) {
     "Inspection Quad": "Inspection Quad: Structural check, steady grid path, high-wind holds, precision landing"
   };
 
-  const handleRun = () => {
-    setIsRunning(true);
-    setIsPaused(false);
+  const profileOptions = profiles.length > 0
+    ? profiles.map((profile) => ({ value: profile.name, label: profile.name }))
+    : Object.keys(profileSpecs).map((name) => ({ value: name, label: name }));
+
+  const handleRun = async () => {
+    setSessionError("");
+    setSessionPending(true);
+    try {
+      const response = await onStartSession?.({
+        battery_id: activeBattery || selectedSession?.batteryId || "B0047",
+        config: {
+          chemistry: batteryType,
+          cell_count: Number(numCells),
+          capacity_ah: Number(mah) / 1000,
+          drone_type: droneProfile,
+          discharge_profile: "PULSE"
+        }
+      });
+
+      setActiveSessionId(response?.session_id ?? "");
+      setIsRunning(true);
+      setIsPaused(false);
+    } catch (error) {
+      setSessionError(error instanceof Error ? error.message : "Could not start session.");
+    } finally {
+      setSessionPending(false);
+    }
   };
 
-  const handlePause = () => {
-    setIsPaused(!isPaused);
+  const handlePause = async () => {
+    if (!activeSessionId) return;
+    const nextPaused = !isPaused;
+    setSessionError("");
+    setSessionPending(true);
+    try {
+      await onPauseSession?.(activeSessionId, nextPaused);
+      setIsPaused(nextPaused);
+    } catch (error) {
+      setSessionError(error instanceof Error ? error.message : "Could not pause session.");
+    } finally {
+      setSessionPending(false);
+    }
   };
 
-  const handleStop = () => {
-    setIsRunning(false);
-    setIsPaused(false);
-    setLocalStreamIndex(0);
+  const handleStop = async () => {
+    setSessionError("");
+    setSessionPending(true);
+    try {
+      if (activeSessionId) {
+        await onEndSession?.(activeSessionId);
+      }
+      setActiveSessionId("");
+      setIsRunning(false);
+      setIsPaused(false);
+    } catch (error) {
+      setSessionError(error instanceof Error ? error.message : "Could not end session.");
+    } finally {
+      setSessionPending(false);
+    }
   };
   return (
     <>
@@ -251,10 +287,17 @@ function Dashboard({ livePoint, liveStream, streamIndex, selectedSession }) {
                       boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
                     }}
                   >
+                    {profiles.length > 0 && profileOptions.map((profile) => (
+                      <option key={profile.value} value={profile.value}>{profile.label}</option>
+                    ))}
+                    {profiles.length === 0 && (
+                      <>
                     <option value="Surveillance Drone">⚡ Surveillance Drone</option>
                     <option value="Delivery Heavy Lift">⚡ Delivery Heavy Lift</option>
                     <option value="FPV Racing Drone">⚡ FPV Racing Drone</option>
                     <option value="Inspection Quad">⚡ Inspection Quad</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -269,23 +312,25 @@ function Dashboard({ livePoint, liveStream, streamIndex, selectedSession }) {
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '24px' }}>
                 <button
                   onClick={handleRun}
+                  disabled={sessionPending}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '8px',
                     padding: '12px 20px', borderRadius: '8px',
                     background: isRunning && !isPaused ? '#246bfe' : '#111827',
-                    color: '#ffffff', border: 'none', cursor: 'pointer', fontWeight: '700', transition: 'background-color 0.15s ease'
+                    color: '#ffffff', border: 'none', cursor: sessionPending ? 'wait' : 'pointer', fontWeight: '700', transition: 'background-color 0.15s ease', opacity: sessionPending ? 0.7 : 1
                   }}
                 >
                   <Play size={14} fill="#ffffff" />
-                  Run
+                  {sessionPending ? "Starting" : "Run"}
                 </button>
                 <button
                   onClick={handlePause}
+                  disabled={sessionPending || !activeSessionId}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '8px',
                     padding: '12px 20px', borderRadius: '8px',
                     background: isPaused ? '#246bfe' : '#ffffff',
-                    color: isPaused ? '#ffffff' : '#111827', border: '1px solid var(--border)', cursor: 'pointer', fontWeight: '700', transition: 'background-color 0.15s ease'
+                    color: isPaused ? '#ffffff' : '#111827', border: '1px solid var(--border)', cursor: sessionPending ? 'wait' : 'pointer', fontWeight: '700', transition: 'background-color 0.15s ease', opacity: sessionPending || !activeSessionId ? 0.6 : 1
                   }}
                 >
                   <Pause size={14} fill={isPaused ? "#ffffff" : "none"} />
@@ -293,10 +338,11 @@ function Dashboard({ livePoint, liveStream, streamIndex, selectedSession }) {
                 </button>
                 <button
                   onClick={handleStop}
+                  disabled={sessionPending || (!isRunning && !activeSessionId)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '8px',
                     padding: '12px 20px', borderRadius: '8px',
-                    background: '#ffffff', color: '#b72f1f', border: '1px solid #ffe5e0', cursor: 'pointer', fontWeight: '700', transition: 'background-color 0.15s ease'
+                    background: '#ffffff', color: '#b72f1f', border: '1px solid #ffe5e0', cursor: sessionPending ? 'wait' : 'pointer', fontWeight: '700', transition: 'background-color 0.15s ease', opacity: sessionPending || (!isRunning && !activeSessionId) ? 0.6 : 1
                   }}
                 >
                   <Square size={14} fill="#b72f1f" />
@@ -304,6 +350,16 @@ function Dashboard({ livePoint, liveStream, streamIndex, selectedSession }) {
                 </button>
               </div>
             </div>
+            {sessionError && (
+              <p style={{ margin: '12px 0 0', color: '#b72f1f', fontSize: '0.85rem', fontWeight: 700 }}>
+                {sessionError}
+              </p>
+            )}
+            {activeSessionId && (
+              <p style={{ margin: '12px 0 0', color: 'var(--text-light)', fontSize: '0.85rem' }}>
+                Active backend session: {activeSessionId}
+              </p>
+            )}
           </div>
         </div>
       )}
