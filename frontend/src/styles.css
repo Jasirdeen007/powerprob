@@ -1,13 +1,57 @@
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-  color: #1a202c;
-  background: #f7fafc;
-  font-synthesis: none;
-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Light Theme (Default) */
+  --bg-main: #f7fafc;
+  --bg-surface: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-elevated: #f1f5f9;
+  
+  --text-main: #1a202c;
+  --text-muted: #64748b;
+  --text-light: #94a3b8;
+  
+  --border-main: #e0e7ff;
+  --border-strong: #cbd5e1;
+  --border-light: #f1f5f9;
+  
+  --brand-primary: #3b82f6;
+  --brand-secondary: #2563eb;
+  --brand-gradient: linear-gradient(135deg, #3b82f6, #2563eb);
+  
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  color: var(--text-main);
+  background: var(--bg-main);
+  font-synthesis: none;
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:root[data-theme='dark'] {
+  /* Clean Dark Theme */
+  --bg-main: #0f172a;
+  --bg-surface: #1e293b;
+  --bg-secondary: #0f172a;
+  --bg-elevated: #334155;
+  
+  --text-main: #f8fafc;
+  --text-muted: #cbd5e1;
+  --text-light: #94a3b8;
+  
+  --border-main: #334155;
+  --border-strong: #475569;
+  --border-light: #1e293b;
+  
+  --brand-primary: #3b82f6;
+  --brand-secondary: #60a5fa;
+  --brand-gradient: linear-gradient(135deg, #3b82f6, #60a5fa);
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
 }
 
 * {
@@ -2733,3 +2777,125 @@ h3 {
     grid-template-columns: 1fr;
   }
 }
+
+/* === THEME OVERRIDES === */
+/* These rules apply the semantic CSS variables to the existing hardcoded colors 
+   to cleanly support both Light and Dark mode without ruining the layout! */
+
+body, .app-shell, .landing-root, .content {
+  background: var(--bg-main) !important;
+  color: var(--text-main) !important;
+}
+
+h1, h2, h3, h4, h5, h6, strong {
+  color: var(--text-main) !important;
+}
+
+p, span, .landing-copy p, .preview-chart span, .preview-metrics span, .auth-card p {
+  color: var(--text-muted) !important;
+}
+
+.sidebar {
+  background: var(--bg-surface) !important;
+  border-right: 1px solid var(--border-main) !important;
+  color: var(--text-main) !important;
+}
+.sidebar button {
+  color: var(--text-muted) !important;
+}
+.sidebar button.active {
+  background: var(--brand-gradient) !important;
+  color: #ffffff !important;
+}
+.sidebar button:hover:not(.active) {
+  background: var(--bg-elevated) !important;
+  color: var(--text-main) !important;
+}
+
+.landing-topnav {
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border-main) !important;
+}
+
+.landing-preview, .auth-card, .user-info-card, .role-card, .metric, .running-strip, .panel {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-main) !important;
+}
+
+.preview-metrics article, .preview-chart, .instrument-search, .auth-card label span, .history-filter-card {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border-main) !important;
+}
+
+.landing-btn.primary {
+  background: var(--brand-gradient) !important;
+  color: #ffffff !important;
+}
+
+.landing-btn.ghost, .logout-button, .history-reset {
+  background: var(--bg-surface) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-strong) !important;
+}
+
+input, select {
+  color: var(--text-main) !important;
+}
+
+.history-table th {
+  background: var(--bg-elevated) !important;
+  color: var(--text-main) !important;
+  border-bottom: 1px solid var(--border-main) !important;
+}
+.history-table td {
+  border-bottom: 1px solid var(--border-main) !important;
+  color: var(--text-main) !important;
+}
+.history-table tr:hover td {
+  background: var(--bg-elevated) !important;
+}
+
+.pill, .checkbox-pill {
+  background: var(--bg-elevated) !important;
+  color: var(--text-muted) !important;
+  border-color: var(--border-main) !important;
+}
+.pill.active, .checkbox-pill.checked {
+  background: var(--brand-primary) !important;
+  color: #ffffff !important;
+  border-color: var(--brand-primary) !important;
+}
+
+/* Light mode specific inversions where needed */
+:root:not([data-theme='dark']) .landing-logo {
+  background: var(--brand-gradient) !important;
+}
+
+/* Fix missing backgrounds and borders for inputs in dark mode */
+input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-row button {
+  background: var(--bg-surface) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-strong) !important;
+}
+
+.mode-actions button:hover, .preset-row button:hover {
+  background: var(--bg-elevated) !important;
+}
+
+.preset-row button.active {
+  background: var(--brand-gradient) !important;
+  color: #ffffff !important;
+  border-color: var(--brand-secondary) !important;
+}
+
+/* Fix overlapping filter grid in History Analytics */
+.history-filter-grid {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 16px !important;
+}
+.history-filter-card {
+  flex: 1 1 280px !important;
+  min-width: 0 !important;
+}
+

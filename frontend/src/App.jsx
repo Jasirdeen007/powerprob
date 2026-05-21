@@ -98,6 +98,15 @@ function App() {
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const [historicalLoaded, setHistoricalLoaded] = useState({});
+  const [theme, setTheme] = useState("light");
+
+  useEffect(() => {
+    if (theme === "dark") {
+      document.documentElement.setAttribute("data-theme", "dark");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  }, [theme]);
 
   useEffect(() => {
     let timeoutId;
@@ -375,7 +384,14 @@ function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar activePage={activePage} onPageChange={setActivePage} currentUser={currentUser} onLogout={handleLogout} />
+      <Sidebar 
+        activePage={activePage} 
+        onPageChange={setActivePage} 
+        currentUser={currentUser} 
+        onLogout={handleLogout} 
+        theme={theme}
+        onToggleTheme={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
+      />
       <main className="content">
         {activePage === "dashboard" && (
           <Dashboard

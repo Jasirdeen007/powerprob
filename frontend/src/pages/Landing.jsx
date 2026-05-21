@@ -71,25 +71,104 @@ function Hero({ onEnterApp }) {
         </button>
       </div>
 
-      <section className="landing-preview" aria-label="Dashboard preview">
-        <div className="preview-head">
-          <strong>Live Battery Dashboard</strong>
-          <span>Healthy</span>
-        </div>
-        <div className="preview-metrics">
-          <PreviewMetric icon={Zap} label="Voltage" value="3.92 V" />
-          <PreviewMetric icon={Activity} label="Current" value="8.10 A" />
-          <PreviewMetric icon={Gauge} label="SOH" value="95.8%" />
-        </div>
-        <div className="preview-chart">
-          <LineChart size={56} />
-          <div>
-            <strong>Realtime stream</strong>
-            <span>Firebase telemetry updates dashboard and history analytics instantly.</span>
-          </div>
-        </div>
-      </section>
+      <PreviewCarousel />
     </section>
+  );
+}
+
+function PreviewCarousel() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  
+  const slides = [
+    {
+      title: "Live Battery Dashboard",
+      status: "Healthy",
+      metrics: [
+        { icon: Zap, label: "Voltage", value: "3.92 V" },
+        { icon: Activity, label: "Current", value: "8.10 A" },
+        { icon: Gauge, label: "SOH", value: "95.8%" }
+      ],
+      descTitle: "Realtime stream",
+      descText: "Firebase telemetry updates dashboard and history analytics instantly."
+    },
+    {
+      title: "Historical Analytics",
+      status: "Data Rich",
+      metrics: [
+        { icon: BatteryCharging, label: "Sessions", value: "248" },
+        { icon: Activity, label: "Avg Temp", value: "32.4 °C" },
+        { icon: LineChart, label: "Records", value: "14,592" }
+      ],
+      descTitle: "Deep Insights",
+      descText: "Filter by battery, date, and mode to uncover performance trends."
+    },
+    {
+      title: "Precision Simulation",
+      status: "Active",
+      metrics: [
+        { icon: Zap, label: "C Rating", value: "25 C" },
+        { icon: Activity, label: "Capacity", value: "2200 mAh" },
+        { icon: Eye, label: "Profile", value: "Drone" }
+      ],
+      descTitle: "Configurable Tests",
+      descText: "Run detailed simulation profiles directly against the hardware."
+    }
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveIndex((current) => (current + 1) % slides.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [slides.length]);
+
+  return (
+    <div className="carousel-container" style={{ position: "relative", overflow: "hidden", borderRadius: "12px" }}>
+      <div 
+        className="carousel-track" 
+        style={{ 
+          display: "flex", 
+          transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)", 
+          transform: `translateX(-${activeIndex * 100}%)` 
+        }}
+      >
+        {slides.map((slide, index) => (
+          <div key={index} style={{ minWidth: "100%", padding: "4px" }}>
+            <section className="landing-preview" aria-label="Dashboard preview">
+              <div className="preview-head">
+                <strong>{slide.title}</strong>
+                <span>{slide.status}</span>
+              </div>
+              <div className="preview-metrics">
+                {slide.metrics.map((m, i) => (
+                  <PreviewMetric key={i} icon={m.icon} label={m.label} value={m.value} />
+                ))}
+              </div>
+              <div className="preview-chart">
+                <LineChart size={56} />
+                <div>
+                  <strong>{slide.descTitle}</strong>
+                  <span>{slide.descText}</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "16px" }}>
+        {slides.map((_, idx) => (
+          <button 
+            key={idx} 
+            onClick={() => setActiveIndex(idx)}
+            style={{ 
+              width: "8px", height: "8px", borderRadius: "50%", 
+              background: idx === activeIndex ? "#3b82f6" : "#cbd5e1", 
+              border: "none", cursor: "pointer", transition: "background 0.3s" 
+            }} 
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 

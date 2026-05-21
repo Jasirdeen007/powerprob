@@ -4,11 +4,11 @@ import {
   Gauge,
   History,
   LogOut,
-  PlusCircle,
-  ShieldCheck
+  Moon,
+  Sun
 } from "lucide-react";
 
-function Sidebar({ activePage, onPageChange, currentUser, onLogout }) {
+function Sidebar({ activePage, onPageChange, currentUser, onLogout, theme, onToggleTheme }) {
   const items = [
     ["dashboard", Gauge, "Dashboard"],
     ["traceability", History, "History Analytics"]
@@ -36,9 +36,15 @@ function Sidebar({ activePage, onPageChange, currentUser, onLogout }) {
           </button>
         ))}
       </nav>
-      <div className="role-card">
+      <nav style={{ marginTop: "auto" }}>
         <button 
-          className="logout-button" 
+          onClick={onToggleTheme} 
+          type="button"
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+        </button>
+        <button 
           onClick={() => {
             if (window.confirm("Are you sure you want to sign out?")) {
               onLogout();
@@ -46,9 +52,9 @@ function Sidebar({ activePage, onPageChange, currentUser, onLogout }) {
           }} 
           type="button"
         >
-          <LogOut size={16} /> Logout
+          <LogOut size={18} /> Logout
         </button>
-      </div>
+      </nav>
     </aside>
   );
 }

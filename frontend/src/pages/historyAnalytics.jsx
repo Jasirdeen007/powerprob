@@ -345,6 +345,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
                     type="checkbox"
                     checked={selectedModes.includes(mode)}
                     onChange={() => toggleMode(mode)}
+                    style={{ display: "none" }}
                   />
                   {mode}
                 </label>
@@ -466,6 +467,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
                       type="checkbox"
                       checked={selectedModes.includes(mode)}
                       onChange={() => toggleMode(mode)}
+                      style={{ display: "none" }}
                     />
                     {mode}
                   </label>
