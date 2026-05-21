@@ -7,5 +7,5 @@ export const statusLabel = {
 export const appUser = {
   name: "Battery Test User",
   role: "User",
-  access: ["dashboard", "history-analytics"]
+  access: ["dashboard", "traceability"]
 };

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
   UserRound,
   Zap
 } from "lucide-react";
+import ToastNotification from "../components/ToastNotification";
 
 function Landing({ mode, onEnterApp, onShowLogin, onShowSignup, onBackHome, onAuthSubmit, authPending, authError }) {
   const isAuthMode = mode === "login" || mode === "signup";
@@ -109,7 +110,15 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
     password: ""
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [toastError, setToastError] = useState(null);
   const isSignup = mode === "signup";
+
+  // Show toast when auth error changes
+  useEffect(() => {
+    if (authError) {
+      setToastError(authError);
+    }
+  }, [authError]);
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -129,6 +138,12 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
 
   return (
     <section className="auth-shell">
+      <ToastNotification 
+        message={toastError} 
+        type="error" 
+        duration={4000}
+        onClose={() => setToastError(null)}
+      />
       <button className="landing-btn ghost back" onClick={onBackHome} type="button">
         <ArrowLeft size={16} /> Back
       </button>
@@ -136,7 +151,6 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
         <div>
           <h1>{isSignup ? "Create account" : "Login"}</h1>
           <p>{isSignup ? "Create a demo account to enter the dashboard." : "Use email and password for this."}</p>
-          {authError && <p className="auth-error">{authError}</p>}
         </div>
 
         {isSignup && (

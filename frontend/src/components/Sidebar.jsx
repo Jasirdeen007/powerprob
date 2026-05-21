@@ -3,6 +3,7 @@ import {
   FileSpreadsheet,
   Gauge,
   History,
+  LogOut,
   PlusCircle,
   ShieldCheck
 } from "lucide-react";
@@ -36,9 +37,17 @@ function Sidebar({ activePage, onPageChange, currentUser, onLogout }) {
         ))}
       </nav>
       <div className="role-card">
-        <span>{currentUser.name}</span>
-        <strong>{currentUser.role}</strong>
-        <button className="logout-button" onClick={onLogout} type="button">Logout</button>
+        <button 
+          className="logout-button" 
+          onClick={() => {
+            if (window.confirm("Are you sure you want to sign out?")) {
+              onLogout();
+            }
+          }} 
+          type="button"
+        >
+          <LogOut size={16} /> Logout
+        </button>
       </div>
     </aside>
   );
