@@ -14,7 +14,9 @@ archive.zip
 server.err.log
 server.out.log
 vite.err.log
-vite.out.log    
+vite.out.log 
+venv/
+backend/venv/
 .venv/
 backend/.venv/
 __pycache__/
