@@ -1,93 +1,81 @@
-import { X, Zap, RotateCcw } from "lucide-react";
+import { X, Zap, RotateCcw, Activity } from "lucide-react";
+
+function MiniChartPreview({ color, points }) {
+  const max = Math.max(...points, 1);
+  return (
+    <div className="operation-mini-chart" style={{ borderTopColor: color }}>
+      <div className="operation-mini-bars">
+        {points.map((v, i) => (
+          <span
+            key={i}
+            style={{ height: `${(v / max) * 100}%`, backgroundColor: color }}
+          />
+        ))}
+      </div>
+      <div className="operation-mini-axis">
+        <span>0</span>
+        <span>time →</span>
+      </div>
+    </div>
+  );
+}
 
 function ChargeDischargeModal({ isOpen, onClose, onSelect, loading = false }) {
   if (!isOpen) return null;
 
   return (
     <div className="config-modal-overlay">
-      <div className="config-modal charge-discharge-modal">
+      <div className="config-modal operation-modal">
         <div className="config-modal-header">
           <h2>Battery Operation</h2>
-          <button className="close-button" onClick={onClose}>
-            <X size={24} />
+          <button type="button" className="close-button" onClick={onClose}>
+            <X size={22} />
           </button>
         </div>
 
         <div className="config-modal-content">
-          <p style={{ textAlign: "center", marginBottom: "24px", color: "var(--text-light)", fontSize: "0.95rem" }}>
-            Select the operation mode for your battery
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-            {/* Discharge Option */}
+          <p className="operation-modal-lead">Choose a cycle. Configuration opens next.</p>
+          <div className="operation-cards">
             <button
+              type="button"
+              className="operation-card operation-discharge"
               onClick={() => onSelect("discharge")}
               disabled={loading}
-              style={{
-                padding: "24px 16px",
-                borderRadius: "10px",
-                border: "2px solid #e0e7ff",
-                background: "white",
-                cursor: loading ? "wait" : "pointer",
-                transition: "all 0.2s ease",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "12px",
-                opacity: loading ? 0.6 : 1
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "#3b82f6";
-                e.currentTarget.style.background = "#eff6ff";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "#e0e7ff";
-                e.currentTarget.style.background = "white";
-              }}
             >
-              <RotateCcw size={32} color="#dc2626" />
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "0.95rem", fontWeight: "700", color: "#1a202c" }}>Discharge</div>
-                <div style={{ fontSize: "0.8rem", color: "#64748b" }}>Test battery discharge cycle</div>
+              <div className="operation-card-icon">
+                <RotateCcw size={28} />
               </div>
+              <div className="operation-card-body">
+                <strong>Discharge</strong>
+                <span>Drone profile, C-rating, capacity</span>
+              </div>
+              <MiniChartPreview color="#dc2626" points={[82, 70, 58, 45, 38, 30, 22]} />
             </button>
 
-            {/* Charge Option */}
             <button
+              type="button"
+              className="operation-card operation-charge"
               onClick={() => onSelect("charge")}
               disabled={loading}
-              style={{
-                padding: "24px 16px",
-                borderRadius: "10px",
-                border: "2px solid #e0e7ff",
-                background: "white",
-                cursor: loading ? "wait" : "pointer",
-                transition: "all 0.2s ease",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "12px",
-                opacity: loading ? 0.6 : 1
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "#3b82f6";
-                e.currentTarget.style.background = "#eff6ff";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "#e0e7ff";
-                e.currentTarget.style.background = "white";
-              }}
             >
-              <Zap size={32} color="#15915b" />
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "0.95rem", fontWeight: "700", color: "#1a202c" }}>Charge</div>
-                <div style={{ fontSize: "0.8rem", color: "#64748b" }}>Coming soon (not available)</div>
+              <div className="operation-card-icon">
+                <Zap size={28} />
               </div>
+              <div className="operation-card-body">
+                <strong>Charge</strong>
+                <span>Chemistry, pack voltage, charge current</span>
+              </div>
+              <MiniChartPreview color="#15915b" points={[18, 28, 40, 55, 68, 78, 88]} />
             </button>
+          </div>
+          <div className="operation-modal-hint">
+            <Activity size={14} />
+            <span>Live charts use the same style as the global dashboard.</span>
           </div>
         </div>
 
         <div className="config-modal-footer">
-          <button className="config-btn cancel" onClick={onClose} disabled={loading}>
+          <button type="button" className="config-btn cancel" onClick={onClose} disabled={loading}>
             Cancel
           </button>
         </div>

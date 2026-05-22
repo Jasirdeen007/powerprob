@@ -1,13 +1,34 @@
-import { useState } from "react";
-import { LineChart as RLineChart, Line, AreaChart as RAreaChart, Area, BarChart as RBarChart, Bar, ScatterChart as RScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid } from "recharts";
-import { AreaChart, BarChart3, LineChart, ScatterChart, Activity, Dot, ActivitySquare, Donut } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  LineChart as RLineChart,
+  Line,
+  AreaChart as RAreaChart,
+  Area,
+  BarChart as RBarChart,
+  Bar,
+  ScatterChart as RScatterChart,
+  Scatter,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  CartesianGrid
+} from "recharts";
+import { getMetricYDomain } from "../lib/chartDomains";
+import { buildAxisLabel } from "../lib/chartEngine";
+import { getChartOptionsForMetric, getDefaultChartType } from "../lib/chartOptions";
+
+const capitalize = (s) => (typeof s === "string" && s.length ? s[0].toUpperCase() + s.slice(1) : s);
 
 const COLORS = {
-  safe: "#15915b",     // Green
-  stable: "#246bfe",   // Blue
-  warning: "#f59e0b",  // Yellow
-  attention: "#d97706",// Orange
-  critical: "#dc2626", // Red
+  safe: "#15915b",
+  stable: "#246bfe",
+  warning: "#f59e0b",
+  attention: "#d97706",
+  critical: "#dc2626"
 };
 
 function getStatusColor(metric, value) {
@@ -32,122 +53,101 @@ function getStatusColor(metric, value) {
     if (value > 10) return COLORS.attention;
     return COLORS.critical;
   }
-  // Default fallback for current/power/resistance
   return COLORS.stable;
 }
 
-export default function TelemetryChartCard({ title, metricKey, unit, data, forceYRange, customAxisLabels }) {
-  const chartOptions = {
-    voltage: [
-      { key: "line", Icon: LineChart, label: "Line Chart" },
-      { key: "area", Icon: AreaChart, label: "Area Chart" },
-      { key: "bar", Icon: BarChart3, label: "Bar Chart" }
-    ],
-    current: [
-      { key: "area", Icon: AreaChart, label: "Area Chart" },
-      { key: "line", Icon: LineChart, label: "Line Chart" },
-      { key: "scatter", Icon: ScatterChart, label: "Scatter Plot" }
-    ],
-    temperature: [
-      { key: "multiline", Icon: Activity, label: "Multi-line" },
-      { key: "heatmap", Icon: AreaChart, label: "Heatmap Area" },
-      { key: "area", Icon: AreaChart, label: "Area Chart" }
-    ],
-    soc: [
-      { key: "donut", Icon: Donut, label: "Donut Chart" },
-      { key: "area", Icon: AreaChart, label: "Area Chart" }
-    ],
-    soh: [
-      { key: "donut", Icon: Donut, label: "Donut Chart" },
-      { key: "area", Icon: AreaChart, label: "Area Chart" }
-    ],
-    power: [
-      { key: "area", Icon: AreaChart, label: "Area Chart" },
-      { key: "bar", Icon: BarChart3, label: "Bar Chart" },
-      { key: "line", Icon: LineChart, label: "Line Chart" }
-    ],
-    resistance: [
-      { key: "scatter", Icon: ScatterChart, label: "Scatter Plot" },
-      { key: "line", Icon: LineChart, label: "Trend Line" },
-      { key: "area", Icon: AreaChart, label: "Area Chart" }
-    ]
-  };
+const TIME_SERIES_TYPES = new Set(["line", "area", "scatter", "step", "multiline"]);
 
-  // Determine Y-axis domain
+export default function TelemetryChartCard({
+  title,
+  metricKey,
+  unit,
+  data,
+  forceYRange,
+  customAxisLabels,
+  operationMode = "discharge",
+  compact = false,
+  showToggles = true
+}) {
+  const options = getChartOptionsForMetric(metricKey);
+  const defaultType = getDefaultChartType(metricKey);
+  const [activeChart, setActiveChart] = useState(defaultType);
+
+  useEffect(() => {
+    setActiveChart(getDefaultChartType(metricKey));
+  }, [metricKey]);
+
   const getYAxisDomain = () => {
-    if (forceYRange) {
-      return [forceYRange.min, forceYRange.max];
-    }
-    if (data.length === 0) return ["auto", "auto"];
-    const values = data.map(d => d[metricKey]).filter(Number.isFinite);
-    if (values.length === 0) return ["auto", "auto"];
-    const max = Math.max(...values);
-    return ["auto", max];
+    if (forceYRange) return [forceYRange.min, forceYRange.max];
+    const values = data.map((d) => d[metricKey]).filter(Number.isFinite);
+    return getMetricYDomain(metricKey, values, operationMode);
   };
 
-  const options = chartOptions[metricKey] || chartOptions.voltage;
-  const [activeChart, setActiveChart] = useState(options[0].key);
-
-  // Normalize data time values to numbers for Recharts
-  const processedData = data.map((d) => ({ ...d, time: typeof d.time === "number" ? d.time : Number(d.time) || 0 }));
-  const latestValue = processedData.length > 0 ? processedData[processedData.length - 1]?.[metricKey] ?? 0 : 0;
+  const processedData = data.map((d) => ({
+    ...d,
+    time: typeof d.time === "number" ? d.time : Number(d.time) || 0
+  }));
+  const latestValue = processedData.length > 0 ? processedData.at(-1)?.[metricKey] ?? 0 : 0;
   const statusColor = getStatusColor(metricKey, latestValue);
+  const isPercent = metricKey === "soc" || metricKey === "soh";
+  const latestDisplay = `${latestValue.toFixed(isPercent ? 0 : 2)}${isPercent ? "%" : ` ${unit}`}`;
 
-  // Get axis labels
+  const yDomain = getYAxisDomain();
+  const formatTick = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return v;
+    if (metricKey === "soc" || metricKey === "soh") return `${Math.round(n)}`;
+    if (Math.abs(n) >= 100) return Math.round(n).toString();
+    return n.toFixed(1);
+  };
+
   const getAxisLabel = (type) => {
-    if (customAxisLabels && customAxisLabels[type]) {
-      return customAxisLabels[type];
-    }
-    if (type === "xlabel") {
-      return "Time (s)";
-    }
-    if (type === "ylabel") {
-      return `${title} (${unit})`;
-    }
+    if (customAxisLabels?.[type]) return customAxisLabels[type];
+    if (type === "xlabel") return buildAxisLabel("time");
+    if (type === "ylabel") return buildAxisLabel(metricKey, yDomain);
     return "";
   };
 
-  function renderChart() {
-    if (processedData.length === 0) return null;
+  function renderRadial() {
+    const remaining = Math.max(0, 100 - latestValue);
+    const pieData = [
+      { name: "Value", value: latestValue },
+      { name: "Remaining", value: remaining }
+    ];
+    const inner = activeChart === "gauge" ? "72%" : "58%";
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fill={statusColor} style={{ fontSize: "1.15rem", fontWeight: 700 }}>
+            {`${latestValue.toFixed(0)}%`}
+          </text>
+          <Pie data={pieData} cx="50%" cy="50%" innerRadius={inner} outerRadius="88%" dataKey="value" stroke="none" paddingAngle={activeChart === "donut" ? 4 : 0}>
+            <Cell fill={statusColor} />
+            <Cell fill="var(--bg-lighter)" />
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
+    );
+  }
 
-    if (activeChart === "donut" || activeChart === "ring" || activeChart === "radial") {
-      const remaining = 100 - latestValue;
-      const pieData = [
-        { name: "Value", value: latestValue },
-        { name: "Remaining", value: remaining }
-      ];
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fill={statusColor} style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
-              {`${latestValue.toFixed(0)}%`}
-            </text>
-            <Pie
-              data={pieData}
-              cx="50%"
-              cy="50%"
-              innerRadius={activeChart === "ring" || activeChart === "radial" ? "65%" : "60%"}
-              outerRadius="85%"
-              fill="#8884d8"
-              paddingAngle={5}
-              dataKey="value"
-              stroke="none"
-            >
-              <Cell fill={statusColor} />
-              <Cell fill="var(--bg-lighter)" />
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
-      );
-    }
+  function renderProgress() {
+    const pct = Math.min(100, Math.max(0, latestValue));
+    return (
+      <div className="chart-progress-wrap">
+        <div className="chart-progress-track">
+          <div className="chart-progress-fill" style={{ width: `${pct}%`, backgroundColor: statusColor }} />
+        </div>
+        <span className="chart-progress-label" style={{ color: statusColor }}>{pct.toFixed(1)}%</span>
+      </div>
+    );
+  }
 
-    // Default charts
+  function renderTimeSeries() {
     const chartContent = (() => {
       switch (activeChart) {
         case "bar":
           return <Bar dataKey={metricKey} fill={statusColor} radius={[2, 2, 0, 0]} isAnimationActive={false} />;
         case "area":
-        case "heatmap":
           return (
             <>
               <defs>
@@ -156,62 +156,53 @@ export default function TelemetryChartCard({ title, metricKey, unit, data, force
                   <stop offset="95%" stopColor={statusColor} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <Area type="monotone" dataKey={metricKey} stroke={statusColor} fillOpacity={1} fill={`url(#gradient-${metricKey})`} isAnimationActive={false} />
+              <Area type="monotone" dataKey={metricKey} stroke={statusColor} fill={`url(#gradient-${metricKey})`} isAnimationActive={false} />
             </>
           );
         case "scatter":
           return <Scatter dataKey={metricKey} fill={statusColor} isAnimationActive={false} />;
-        case "multiline":
-          return (
-            <>
-              <Line type="monotone" dataKey={metricKey} stroke={statusColor} dot={false} strokeWidth={2} isAnimationActive={false} />
-              <Line type="monotone" dataKey="thermalLimit" stroke={COLORS.warning} strokeDasharray="3 3" dot={false} strokeWidth={1} isAnimationActive={false} />
-              <Line type="monotone" dataKey="criticalLimit" stroke={COLORS.critical} strokeDasharray="3 3" dot={false} strokeWidth={1} isAnimationActive={false} />
-            </>
-          );
+        case "step":
+          return <Line type="stepAfter" dataKey={metricKey} stroke={statusColor} dot={false} strokeWidth={2} isAnimationActive={false} />;
         case "line":
         default:
           return <Line type="monotone" dataKey={metricKey} stroke={statusColor} dot={false} strokeWidth={2} activeDot={{ r: 4 }} isAnimationActive={false} />;
       }
     })();
 
-    const ChartComponent = (() => {
-      switch (activeChart) {
-        case "bar": return RBarChart;
-        case "area":
-        case "heatmap": return RAreaChart;
-        case "scatter": return RScatterChart;
-        case "line":
-        case "multiline":
-        default: return RLineChart;
-      }
-    })();
-
-    const yAxisDomain = getYAxisDomain();
+    const ChartComponent = activeChart === "bar"
+      ? RBarChart
+      : activeChart === "area"
+        ? RAreaChart
+        : activeChart === "scatter"
+          ? RScatterChart
+          : RLineChart;
 
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <ChartComponent data={processedData} margin={{ top: 5, right: 10, left: 0, bottom: 20 }}>
+        <ChartComponent data={processedData} margin={{ top: 8, right: 12, left: 2, bottom: 22 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-          <XAxis 
-            dataKey="time" 
-            tick={{ fill: "var(--text-light)", fontSize: 10 }} 
-            tickLine={false} 
-            axisLine={false}
-            label={{ value: getAxisLabel("xlabel"), position: "insideBottomRight", offset: -10, fill: "var(--text-light)", fontSize: 12 }}
+          <XAxis
+            dataKey="time"
+            tickFormatter={formatTick}
+            tick={{ fill: "var(--text-main)", fontSize: 10 }}
+            tickLine={false}
+            axisLine={{ stroke: "var(--border)" }}
+            label={{ value: getAxisLabel("xlabel"), position: "insideBottom", offset: -2, fill: "var(--text-muted)", fontSize: 10 }}
           />
-          <YAxis 
-            domain={yAxisDomain} 
-            tick={{ fill: "var(--text-light)", fontSize: 10 }} 
-            tickLine={false} 
+          <YAxis
+            domain={yDomain}
+            tickFormatter={formatTick}
+            tick={{ fill: "var(--text-main)", fontSize: 10 }}
+            tickLine={false}
             axisLine={false}
-            label={{ value: getAxisLabel("ylabel"), angle: -90, position: "insideLeft", fill: "var(--text-light)", fontSize: 12 }}
+            width={40}
           />
           <Tooltip
             cursor={false}
             formatter={(value) => [Number(value).toFixed(2), title]}
-            contentStyle={{ backgroundColor: "var(--bg-light)", border: "1px solid var(--border)", borderRadius: "4px" }}
-            itemStyle={{ color: statusColor, fontWeight: "bold" }}
+            contentStyle={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-main)", borderRadius: "6px", color: "var(--text-main)" }}
+            labelStyle={{ color: "var(--text-muted)" }}
+            itemStyle={{ color: statusColor, fontWeight: 700 }}
           />
           {chartContent}
         </ChartComponent>
@@ -219,43 +210,44 @@ export default function TelemetryChartCard({ title, metricKey, unit, data, force
     );
   }
 
+  function renderChart() {
+    if (processedData.length === 0) return null;
+    if (activeChart === "progress" && isPercent) return renderProgress();
+    if (activeChart === "gauge" || activeChart === "donut") return renderRadial();
+    if (TIME_SERIES_TYPES.has(activeChart)) return renderTimeSeries();
+    return renderTimeSeries();
+  }
+
   return (
-    <div className="telemetry-chart-card panel" style={{ display: "flex", flexDirection: "column", height: "320px", padding: "12px", marginBottom: "8px", borderRadius: "10px", borderTop: `3px solid ${statusColor}` }}>
-      <div className="panel-head" style={{ marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <div className={`telemetry-chart-card panel ${compact ? "compact" : ""}`}>
+      <div className="panel-head telemetry-chart-head">
         <div>
-          <h3 style={{ margin: 0, fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "6px" }}>
-            {title}
-            <span style={{ fontSize: "0.7rem", color: "var(--text-light)" }}>{unit}</span>
-          </h3>
-          <span style={{ fontSize: "1.25rem", fontWeight: "600", color: statusColor }}>
-            {latestValue.toFixed(2)}
-          </span>
+          <h3 className="telemetry-chart-title">{capitalize(title)}</h3>
+          <div className="telemetry-chart-meta">
+            <span className="telemetry-chart-range">{buildAxisLabel(metricKey, yDomain)}</span>
+            <span className="telemetry-chart-value" style={{ color: statusColor }} title={latestDisplay}>
+              {latestValue.toFixed(isPercent ? 0 : 2)}{isPercent ? "%" : ` ${unit}`}
+            </span>
+          </div>
         </div>
-        <div className="visual-toggle" aria-label="Chart visualization type" style={{ display: "flex", gap: "2px" }}>
-          {options.map(({ key, Icon, label }) => (
-            <button
-              key={key}
-              className={activeChart === key ? "active" : ""}
-              onClick={() => setActiveChart(key)}
-              title={label}
-              type="button"
-              style={{
-                background: activeChart === key ? "var(--bg-hover)" : "transparent",
-                border: "none",
-                padding: "4px",
-                borderRadius: "4px",
-                cursor: "pointer",
-                color: activeChart === key ? statusColor : "var(--text-light)"
-              }}
-            >
-              <Icon size={16} />
-            </button>
-          ))}
-        </div>
+        {showToggles && options.length > 1 ? (
+          <div className="visual-toggle" aria-label="Chart type">
+            {options.map(({ key, Icon, label }) => (
+              <button
+                key={key}
+                type="button"
+                className={activeChart === key ? "active" : ""}
+                onClick={() => setActiveChart(key)}
+                title={label}
+                style={{ color: activeChart === key ? statusColor : "var(--text-light)" }}
+              >
+                <Icon size={15} />
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
-      <div className="chart-container" style={{ flex: 1, minHeight: 0, position: "relative" }}>
-        {renderChart()}
-      </div>
+      <div className="chart-container">{renderChart()}</div>
     </div>
   );
 }

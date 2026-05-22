@@ -1,92 +1,101 @@
-import { useState } from "react";
-import {
-  BatteryCharging,
-  LogOut,
-  Menu,
-  X,
-  User,
-  Settings
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BatteryCharging, LogOut, Menu, Moon, Sun, X, User } from "lucide-react";
+
+function BrandLogo({ size = 22 }) {
+  return (
+    <span className="brand-logo-mark" aria-hidden="true">
+      <BatteryCharging size={size} strokeWidth={2.5} color="#ffffff" />
+    </span>
+  );
+}
 
 function Header({ activePage, onPageChange, currentUser, onLogout, theme, onToggleTheme }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileRef = useRef(null);
 
   const items = [
     { key: "dashboard", label: "Dashboard" },
     { key: "traceability", label: "History Analytics" }
   ];
 
-  const handlePageChange = (key) => {
-    onPageChange(key);
-    setMobileMenuOpen(false);
-  };
+  useEffect(() => {
+    if (!profileMenuOpen) return undefined;
+    function onPointerDown(e) {
+      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileMenuOpen(false);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") setProfileMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [profileMenuOpen]);
 
   return (
     <header className="header-top">
-      <div className="header-container" style={{ justifyContent: "center", position: "relative" }}>
-        {/* Left: Logo and Brand */}
-        <div className="header-brand" style={{ position: "absolute", left: "24px" }}>
-          <BatteryCharging size={24} />
+      <div className="header-container">
+        <div className="header-brand">
+          <BrandLogo />
           <div className="brand-text">
-            <strong>PowerProbe</strong>
-            <span>BMS Dashboard</span>
+            <strong className="brand-name">PowerProbe</strong>
+            <span className="brand-tagline">BMS Dashboard</span>
           </div>
         </div>
 
-        {/* Center: Navigation (Desktop) */}
         <nav className="header-nav desktop-only">
           {items.map(({ key, label }) => (
             <button
               key={key}
+              type="button"
               className={`nav-item ${activePage === key ? "active" : ""}`}
               disabled={!currentUser?.access?.includes(key)}
-              onClick={() => handlePageChange(key)}
+              onClick={() => { onPageChange(key); setMobileMenuOpen(false); }}
             >
               {label}
             </button>
           ))}
         </nav>
 
-        {/* Right: Profile and Settings */}
-        <div className="header-actions" style={{ position: "absolute", right: "24px" }}>
-          {/* Live Status Indicator */}
+        <div className="header-actions">
           <div className="live-status">
-            <span className="status-dot"></span>
-            <span className="status-text">LIVE</span>
+            <span className="status-dot" />
+            <span>LIVE</span>
           </div>
 
-          {/* Profile Menu */}
-          <div className="profile-menu">
+          <div className="header-profile-menu" ref={profileRef}>
             <button
+              type="button"
               className="profile-button"
-              onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-              title="Profile"
+              onClick={() => setProfileMenuOpen((o) => !o)}
+              aria-expanded={profileMenuOpen}
             >
-              <User size={20} />
+              <User size={18} />
             </button>
 
             {profileMenuOpen && (
-              <div className="profile-dropdown">
-                <div className="profile-header">
-                  <User size={16} />
-                  <span>{currentUser?.name || currentUser?.email || "User"}</span>
+              <div className="header-profile-dropdown">
+                <div className="header-profile-user">
+                  <div className="header-profile-avatar">
+                    <User size={18} />
+                  </div>
+                  <div>
+                    <strong>{currentUser?.name || "User"}</strong>
+                    <span>{currentUser?.email || "No email"}</span>
+                  </div>
                 </div>
-                <div className="profile-details">
-                  <p className="detail-label">Email</p>
-                  <p className="detail-value">{currentUser?.email || "N/A"}</p>
-                </div>
-                <div className="profile-divider"></div>
-                <button
-                  className="profile-option"
-                  onClick={onToggleTheme}
-                >
-                  {theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode"}
+                <button type="button" className="header-profile-action" onClick={onToggleTheme}>
+                  {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+                  {theme === "dark" ? "Light mode" : "Dark mode"}
                 </button>
                 <button
-                  className="profile-option logout"
+                  type="button"
+                  className="header-profile-action logout"
                   onClick={() => {
-                    if (window.confirm("Are you sure you want to sign out?")) {
+                    if (window.confirm("Sign out?")) {
                       onLogout();
                       setProfileMenuOpen(false);
                     }
@@ -98,25 +107,21 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
             )}
           </div>
 
-          {/* Mobile Menu Toggle */}
-          <button
-            className="mobile-menu-toggle mobile-only"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          <button type="button" className="mobile-menu-toggle mobile-only" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {mobileMenuOpen && (
         <nav className="header-mobile-menu">
           {items.map(({ key, label }) => (
             <button
               key={key}
+              type="button"
               className={`mobile-nav-item ${activePage === key ? "active" : ""}`}
               disabled={!currentUser?.access?.includes(key)}
-              onClick={() => handlePageChange(key)}
+              onClick={() => { onPageChange(key); setMobileMenuOpen(false); }}
             >
               {label}
             </button>

@@ -196,6 +196,7 @@ function App() {
       setCurrentUser({
         ...appUser,
         name: user.displayName || user.email?.split("@")[0] || appUser.name,
+        email: user.email ?? "",
         role: appUser.role
       });
       setAuthView("app");
@@ -273,6 +274,7 @@ function App() {
           setCurrentUser({
             ...appUser,
             name: user.displayName || userDetails.name || fallbackName,
+            email: user.email ?? userDetails.email ?? "",
             role: appUser.role
           });
         } else {
@@ -280,6 +282,7 @@ function App() {
           setCurrentUser({
             ...appUser,
             name: user.displayName || fallbackName,
+            email: user.email ?? userDetails.email ?? "",
             role: appUser.role
           });
         }
@@ -287,6 +290,7 @@ function App() {
         setCurrentUser({
           ...appUser,
           name: userDetails.name || fallbackName,
+          email: userDetails.email ?? "",
           role: appUser.role
         });
       }

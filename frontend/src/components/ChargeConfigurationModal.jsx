@@ -2,49 +2,36 @@ import { useEffect, useState } from "react";
 import { X, Plus } from "lucide-react";
 import { loadChemistries, saveCustomChemistry } from "../lib/chemistries";
 
-function ConfigurationModal({
+function ChargeConfigurationModal({
   isOpen,
   onClose,
   onApply,
-  cRating,
   batteryType,
-  mah,
-  numCells,
   voltage,
-  droneProfile,
-  onCRatingChange,
+  chargeCurrent,
+  batteryName,
   onBatteryTypeChange,
-  onMahChange,
-  onNumCellsChange,
   onVoltageChange,
-  onDroneProfileChange,
-  profiles = [],
-  profileSpecs = {},
-  profileDescriptions = {},
-  batteryName = "",
+  onChargeCurrentChange,
   onBatteryNameChange
 }) {
-  const [localCRating, setLocalCRating] = useState(cRating);
   const [localBatteryType, setLocalBatteryType] = useState(batteryType);
-  const [localMah, setLocalMah] = useState(mah);
-  const [localNumCells, setLocalNumCells] = useState(numCells);
   const [localVoltage, setLocalVoltage] = useState(voltage);
-  const [localDroneProfile, setLocalDroneProfile] = useState(droneProfile);
+  const [localChargeCurrent, setLocalChargeCurrent] = useState(chargeCurrent);
   const [localBatteryName, setLocalBatteryName] = useState(batteryName);
   const [chemistries, setChemistries] = useState(loadChemistries());
   const [customChemistry, setCustomChemistry] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
-    setLocalCRating(cRating);
     setLocalBatteryType(batteryType);
-    setLocalMah(mah);
-    setLocalNumCells(numCells);
     setLocalVoltage(voltage);
-    setLocalDroneProfile(droneProfile);
+    setLocalChargeCurrent(chargeCurrent);
     setLocalBatteryName(batteryName);
     setChemistries(loadChemistries());
-  }, [isOpen, cRating, batteryType, mah, numCells, voltage, droneProfile, batteryName]);
+  }, [isOpen, batteryType, voltage, chargeCurrent, batteryName]);
+
+  if (!isOpen) return null;
 
   function handleAddChemistry() {
     const next = saveCustomChemistry(customChemistry);
@@ -56,67 +43,51 @@ function ConfigurationModal({
     }
   }
 
-  const handleApply = () => {
-    onCRatingChange(localCRating);
+  function handleApply() {
     onBatteryTypeChange(localBatteryType);
-    onMahChange(localMah);
-    onNumCellsChange(localNumCells);
     onVoltageChange(localVoltage);
-    onDroneProfileChange(localDroneProfile);
+    onChargeCurrentChange(localChargeCurrent);
     if (onBatteryNameChange) {
       onBatteryNameChange(localBatteryName);
     }
     onApply();
-  };
-
-  if (!isOpen) return null;
-
-  const profileOptions = profiles.length > 0
-    ? profiles.map((profile) => ({ value: profile.name, label: profile.name }))
-    : Object.keys(profileSpecs).map((name) => ({ value: name, label: name }));
+  }
 
   return (
     <div className="config-modal-overlay">
       <div className="config-modal">
         <div className="config-modal-header">
-          <h2>Discharge Configuration</h2>
-          <button className="close-button" onClick={onClose}>
+          <h2>Charge Configuration</h2>
+          <button className="close-button" onClick={onClose} type="button">
             <X size={24} />
           </button>
         </div>
 
         <div className="config-modal-content">
-          {/* Battery Name Section */}
+          <p className="config-mode-hint">
+            Balance charge mode is applied automatically for safe lithium charging.
+          </p>
+
           <div className="config-section">
             <h3>Battery Information</h3>
             <div className="config-grid">
               <div className="config-field">
-                <label>Battery Name</label>
+                <label>Battery Name (optional)</label>
                 <input
                   type="text"
                   value={localBatteryName}
                   onChange={(e) => setLocalBatteryName(e.target.value)}
-                  placeholder="e.g., Main Battery Pack"
+                  placeholder="e.g., Pack A"
                 />
               </div>
             </div>
           </div>
 
-          {/* Battery Specs Section */}
           <div className="config-section">
-            <h3>Battery Specifications</h3>
+            <h3>Charge Parameters</h3>
             <div className="config-grid">
               <div className="config-field">
-                <label>C Rating</label>
-                <input
-                  type="number"
-                  value={localCRating}
-                  onChange={(e) => setLocalCRating(e.target.value)}
-                  placeholder="e.g., 25"
-                />
-              </div>
-              <div className="config-field">
-                <label>Battery Type</label>
+                <label>Battery Type (chemistry)</label>
                 <select value={localBatteryType} onChange={(e) => setLocalBatteryType(e.target.value)}>
                   {chemistries.map((chem) => (
                     <option key={chem} value={chem}>{chem}</option>
@@ -138,60 +109,36 @@ function ConfigurationModal({
                 </div>
               </div>
               <div className="config-field">
-                <label>Capacity (mAh)</label>
-                <input
-                  type="number"
-                  value={localMah}
-                  onChange={(e) => setLocalMah(e.target.value)}
-                  placeholder="e.g., 2200"
-                />
-              </div>
-              <div className="config-field">
-                <label>Number of Cells</label>
-                <input
-                  type="number"
-                  value={localNumCells}
-                  onChange={(e) => setLocalNumCells(e.target.value)}
-                  placeholder="e.g., 3"
-                />
-              </div>
-              <div className="config-field">
-                <label>Voltage (V)</label>
+                <label>Pack Voltage (V)</label>
                 <input
                   type="number"
                   step="0.1"
+                  min="0"
                   value={localVoltage}
                   onChange={(e) => setLocalVoltage(e.target.value)}
-                  placeholder="e.g., 11.1"
+                  placeholder="e.g., 11.1 for 3S"
+                />
+              </div>
+              <div className="config-field">
+                <label>Charge Current (A)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={localChargeCurrent}
+                  onChange={(e) => setLocalChargeCurrent(e.target.value)}
+                  placeholder="e.g., 2.2 for 1C on 2200mAh"
                 />
               </div>
             </div>
-          </div>
-
-          {/* Drone Profile Section */}
-          <div className="config-section">
-            <h3>Drone Profile</h3>
-            <div className="config-field">
-              <label>Select Drone Profile</label>
-              <select value={localDroneProfile} onChange={(e) => setLocalDroneProfile(e.target.value)}>
-                {profileOptions.map((profile) => (
-                  <option key={profile.value} value={profile.value}>
-                    {profile.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {profileDescriptions[localDroneProfile] && (
-              <p className="profile-description">{profileDescriptions[localDroneProfile]}</p>
-            )}
           </div>
         </div>
 
         <div className="config-modal-footer">
-          <button className="config-btn cancel" onClick={onClose}>
+          <button className="config-btn cancel" onClick={onClose} type="button">
             Cancel
           </button>
-          <button className="config-btn apply" onClick={handleApply}>
+          <button className="config-btn apply" onClick={handleApply} type="button">
             Apply Configuration
           </button>
         </div>
@@ -200,4 +147,4 @@ function ConfigurationModal({
   );
 }
 
-export default ConfigurationModal;
+export default ChargeConfigurationModal;

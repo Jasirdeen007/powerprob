@@ -5,6 +5,7 @@ import {
   createUserWithEmailAndPassword,
   getAuth,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   updateProfile
@@ -219,4 +220,15 @@ export async function signOutFirebaseAccount() {
   const auth = getFirebaseAuth();
   if (!auth) return;
   await signOut(auth);
+}
+
+export async function sendPasswordReset(email) {
+  const auth = getFirebaseAuth();
+  if (!auth) {
+    throw new Error("Password reset requires Firebase Auth to be configured.");
+  }
+  if (!email?.trim()) {
+    throw new Error("Enter your email address to reset your password.");
+  }
+  await sendPasswordResetEmail(auth, email.trim());
 }

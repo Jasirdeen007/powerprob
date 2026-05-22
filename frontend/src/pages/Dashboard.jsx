@@ -1,16 +1,21 @@
 import { useState, useEffect } from "react";
-import { Activity, Flame, Gauge, Play, Pause, Square, Zap, BatteryFull, Settings, Search, Plus } from "lucide-react";
+import { Activity, Flame, Gauge, Play, Pause, Square, Zap, BatteryFull, Settings } from "lucide-react";
 import MetricCard from "../components/MetricCard";
 import TelemetryChartCard from "../components/TelemetryChartCard";
 import ConfigurationModal from "../components/ConfigurationModal";
-import CustomAxisConfig from "../components/CustomAxisConfig";
+import ChargeConfigurationModal from "../components/ChargeConfigurationModal";
 import ChargeDischargeModal from "../components/ChargeDischargeModal";
-import VariableComparisonSelector from "../components/VariableComparisonSelector";
+import CustomChartBuilder from "../components/CustomChartBuilder";
 import { statusLabel } from "../data/appConfig";
 import { clamp } from "../lib/battery";
 
+import demoData from "../demo-data.json";
+
 function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, profiles = [], onStartSession, onEndSession, onPauseSession }) {
   const [configModalOpen, setConfigModalOpen] = useState(false);
+  const [chargeConfigModalOpen, setChargeConfigModalOpen] = useState(false);
+  const [operationMode, setOperationMode] = useState("discharge");
+
   const [cRating, setCRating] = useState("25");
   const [batteryType, setBatteryType] = useState("Li-ion");
   const [mah, setMah] = useState("2200");
@@ -18,18 +23,28 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
   const [voltage, setVoltage] = useState("11.1");
   const [droneProfile, setDroneProfile] = useState("Surveillance Drone");
 
+  const [chargeBatteryType, setChargeBatteryType] = useState("LiPo");
+  const [chargeVoltage, setChargeVoltage] = useState("11.1");
+  const [chargeCurrent, setChargeCurrent] = useState("2.2");
+
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState("");
   const [sessionPending, setSessionPending] = useState(false);
   const [sessionError, setSessionError] = useState("");
-  const [customAxisLabels, setCustomAxisLabels] = useState({});
   const [batteryName, setBatteryName] = useState("");
   const [chargeModalOpen, setChargeModalOpen] = useState(false);
-  const [comparisonOpen, setComparisonOpen] = useState(false);
-  const [comparisonConfig, setComparisonConfig] = useState(null);
+  const [useDemo, setUseDemo] = useState(true);
 
-  const fullReadings = liveStream.length > 0 ? liveStream : selectedSession?.readings ?? [];
+  const demoReadings = (demoData?.testSessions?.[0]?.readings ?? []).map((r) => ({
+    time: r.time ?? 0,
+    voltage: Number(r.voltage) || 0,
+    current: Number(r.current) || 0,
+    temperature: Number(r.temperature) || 0
+  }));
+
+  const fullReadings = selectedSession?.readings ?? ((!useDemo && (liveStream?.length > 0)) ? liveStream : demoReadings);
+  const usingDemo = fullReadings === demoReadings;
 
   const profileSpecs = {
     "Surveillance Drone": { cRating: "10", batteryType: "Li-ion", mah: "4500", numCells: "4", voltage: "14.8" },
@@ -39,6 +54,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
   };
 
   useEffect(() => {
+    if (operationMode !== "discharge") return;
     const specs = profileSpecs[droneProfile];
     if (specs) {
       setCRating(specs.cRating);
@@ -47,7 +63,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
       setNumCells(specs.numCells);
       setVoltage(specs.voltage);
     }
-  }, [droneProfile]);
+  }, [droneProfile, operationMode]);
 
   const point = fullReadings.at(-1) ?? fullReadings[0] ?? livePoint;
 
@@ -81,9 +97,28 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
     "Inspection Quad": "Inspection Quad: Structural check, steady grid path, high-wind holds, precision landing"
   };
 
-  const profileOptions = profiles.length > 0
-    ? profiles.map((profile) => ({ value: profile.name, label: profile.name }))
-    : Object.keys(profileSpecs).map((name) => ({ value: name, label: name }));
+  const buildSessionConfig = () => {
+    if (operationMode === "charge") {
+      const packVoltage = Number(chargeVoltage) || 11.1;
+      const cellCount = Math.max(1, Math.round(packVoltage / 3.7));
+      const capacityAh = Math.max(0.5, (Number(chargeCurrent) || 2) * 1);
+      return {
+        chemistry: chargeBatteryType,
+        cell_count: cellCount,
+        capacity_ah: capacityAh,
+        drone_type: droneProfile,
+        discharge_profile: "BALANCE_CHG"
+      };
+    }
+
+    return {
+      chemistry: batteryType,
+      cell_count: Number(numCells),
+      capacity_ah: Number(mah) / 1000,
+      drone_type: droneProfile,
+      discharge_profile: "PULSE"
+    };
+  };
 
   const handleRun = async () => {
     setSessionError("");
@@ -91,17 +126,12 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
     try {
       const response = await onStartSession?.({
         battery_id: activeBattery || selectedSession?.batteryId || "B0047",
-        config: {
-          chemistry: batteryType,
-          cell_count: Number(numCells),
-          capacity_ah: Number(mah) / 1000,
-          drone_type: droneProfile,
-          discharge_profile: "PULSE"
-        }
+        config: buildSessionConfig()
       });
 
       setActiveSessionId(response?.session_id ?? "");
       setIsRunning(true);
+      setUseDemo(false);
       setIsPaused(false);
     } catch (error) {
       setSessionError(error instanceof Error ? error.message : "Could not start session.");
@@ -142,16 +172,15 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
     }
   };
 
-  const handleConfigurationApply = () => {
-    setConfigModalOpen(false);
-  };
-
   return (
-    <>
+    <section className="dashboard-page">
       <div className="dashboard-top-section">
         <div className="dashboard-title-area">
           <h1>Live Battery Dashboard</h1>
           <p>Monitor live battery telemetry and performance metrics in real-time</p>
+          <span className={`operation-mode-badge mode-${operationMode}`}>
+            {operationMode === "charge" ? "Charge cycle" : "Discharge cycle"}
+          </span>
         </div>
 
         <div className="dashboard-action-buttons">
@@ -159,24 +188,17 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
             className="btn-configuration"
             onClick={() => setChargeModalOpen(true)}
             title="Open configuration settings"
+            type="button"
           >
             <Settings size={18} />
             Configuration
           </button>
-          <button
-            className="btn-compare"
-            onClick={() => setComparisonOpen(true)}
-            title="Compare variables"
-            style={{ marginLeft: 8 }}
-          >
-            <Plus size={14} />
-            Compare
-          </button>
-          
+
           <button
             className={`btn-run ${isRunning && !isPaused ? "active" : ""}`}
             onClick={handleRun}
             disabled={sessionPending}
+            type="button"
           >
             <Play size={16} fill="currentColor" />
             {sessionPending ? "Starting..." : "Run"}
@@ -186,6 +208,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
             className={`btn-pause ${isPaused ? "active" : ""}`}
             onClick={handlePause}
             disabled={sessionPending || !activeSessionId}
+            type="button"
           >
             <Pause size={16} />
             Pause
@@ -195,6 +218,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
             className="btn-stop"
             onClick={handleStop}
             disabled={sessionPending || (!isRunning && !activeSessionId)}
+            type="button"
           >
             <Square size={16} fill="currentColor" />
             Stop
@@ -214,7 +238,6 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
         </div>
       )}
 
-      {/* Instrument Panel Header */}
       <div className="instrument-panel-header">
         <div>
           <h2>Instrument Panel</h2>
@@ -225,100 +248,99 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
         </div>
       </div>
 
-      {/* KPI Row 1: Voltage, Current, Temperature */}
       <div className="metrics-row">
         <MetricCard icon={Zap} label="Voltage" value={`${activeLivePoint.voltage.toFixed(2)} V`} detail="active bus" tone="good" />
         <MetricCard icon={Activity} label="Current" value={`${activeLivePoint.current.toFixed(2)} A`} detail="realtime draw" tone="good" />
         <MetricCard icon={Flame} label="Temperature" value={`${activeLivePoint.temperature.toFixed(1)} °C`} detail="thermal state" tone={tone} />
       </div>
 
-      {/* KPI Row 2: SOC, SOH, Power */}
       <div className="metrics-row">
         <MetricCard icon={BatteryFull} label="SOC" value={`${(readings[readings.length - 1]?.soc ?? 100)}%`} detail="charge level" tone="good" />
         <MetricCard icon={Gauge} label="SOH" value={`${(readings[readings.length - 1]?.soh ?? 100.0).toFixed(1)}%`} detail="health status" tone="good" />
         <MetricCard icon={Zap} label="Power" value={`${powerValue.toFixed(1)} W`} detail="power draw" tone="good" />
       </div>
 
-      {/* Chart Row 1: Voltage Trend, Current Load (2 cols) */}
-      <div className="chart-row-two-cols">
-        <TelemetryChartCard 
-          title="Voltage Trend" 
-          metricKey="voltage" 
-          unit="V" 
-          data={readings}
-          customAxisLabels={customAxisLabels.voltage}
-        />
-        <TelemetryChartCard 
-          title="Current Load" 
-          metricKey="current" 
-          unit="A" 
-          data={readings}
-          customAxisLabels={customAxisLabels.current}
-        />
-      </div>
-
-      {/* Chart Row 2: Thermal Profile, SOC, SOH (3 cols) */}
-      <div className="chart-row-three-cols">
-        <TelemetryChartCard 
-          title="Thermal Profile" 
-          metricKey="temperature" 
-          unit="°C" 
-          data={readings}
-          customAxisLabels={customAxisLabels.temperature}
-        />
-        <TelemetryChartCard 
-          title="State of Charge" 
-          metricKey="soc" 
-          unit="%" 
-          data={readings}
-          forceYRange={{ min: 0, max: 100 }}
-          customAxisLabels={customAxisLabels.soc}
-        />
-        <TelemetryChartCard 
-          title="State of Health" 
-          metricKey="soh" 
-          unit="%" 
-          data={readings}
-          forceYRange={{ min: 0, max: 100 }}
-          customAxisLabels={customAxisLabels.soh}
-        />
-      </div>
-
-      {/* Chart Row 3: Power Consumption only (removed Internal Resistance) */}
-      <div className="chart-row-two-cols">
-        <TelemetryChartCard 
-          title="Power Consumption" 
-          metricKey="power" 
-          unit="W" 
-          data={readings}
-          customAxisLabels={customAxisLabels.power}
-        />
-      </div>
-
-      {/* Comparison Charts (user-selected) */}
-      {comparisonConfig && (
-        <div style={{ marginTop: 12 }}>
-          <h3 style={{ margin: "8px 0" }}>Comparison Charts</h3>
-          {comparisonConfig.mode === "three-variable" ? (
-            <div className="chart-row-three-cols">
-              <TelemetryChartCard title={comparisonConfig.var1} metricKey={comparisonConfig.var1} unit="" data={readings} />
-              <TelemetryChartCard title={comparisonConfig.var2} metricKey={comparisonConfig.var2} unit="" data={readings} />
-              <TelemetryChartCard title={comparisonConfig.var3} metricKey={comparisonConfig.var3} unit="" data={readings} />
-            </div>
-          ) : (
-            <div className="chart-row-two-cols">
-              <TelemetryChartCard title={comparisonConfig.var1} metricKey={comparisonConfig.var1} unit="" data={readings} />
-              <TelemetryChartCard title={comparisonConfig.var2} metricKey={comparisonConfig.var2} unit="" data={readings} />
-            </div>
-          )}
+      <section className="global-charts-section">
+        <div className="global-charts-head">
+          <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
+            <h2>Global Telemetry</h2>
+            {usingDemo && <span className="demo-badge">Demo data</span>}
+          </div>
+          <p>Six live charts — axes adapt to {operationMode} operating range</p>
         </div>
-      )}
 
-      {/* Configuration Modal */}
+        <div className="chart-row-two-cols">
+          <TelemetryChartCard
+            title="Voltage Trend"
+            metricKey="voltage"
+            unit="V"
+            data={readings}
+            operationMode={operationMode}
+            compact
+            showToggles
+          />
+          <TelemetryChartCard
+            title="Current Load"
+            metricKey="current"
+            unit="A"
+            data={readings}
+            operationMode={operationMode}
+            compact
+            showToggles
+          />
+        </div>
+
+        <div className="chart-row-two-cols">
+          <TelemetryChartCard
+            title="Thermal Profile"
+            metricKey="temperature"
+            unit="°C"
+            data={readings}
+            operationMode={operationMode}
+            compact
+            showToggles
+          />
+          <TelemetryChartCard
+            title="Power Consumption"
+            metricKey="power"
+            unit="W"
+            data={readings}
+            operationMode={operationMode}
+            compact
+            showToggles
+          />
+        </div>
+
+        <div className="chart-row-two-cols">
+          <TelemetryChartCard
+            title="State of Charge"
+            metricKey="soc"
+            unit="%"
+            data={readings}
+            forceYRange={{ min: 0, max: 100 }}
+            operationMode={operationMode}
+            compact
+            showToggles
+          />
+          <TelemetryChartCard
+            title="State of Health"
+            metricKey="soh"
+            unit="%"
+            data={readings}
+            forceYRange={{ min: 0, max: 100 }}
+            operationMode={operationMode}
+            compact
+            showToggles
+          />
+        </div>
+      </section>
+
+      <CustomChartBuilder data={readings} operationMode={operationMode} />
+
       <ConfigurationModal
         isOpen={configModalOpen}
         onClose={() => setConfigModalOpen(false)}
-        onApply={handleConfigurationApply}
+        onApply={() => setConfigModalOpen(false)}
         cRating={cRating}
         batteryType={batteryType}
         mah={mah}
@@ -338,29 +360,34 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
         profileDescriptions={profileDescriptions}
       />
 
+      <ChargeConfigurationModal
+        isOpen={chargeConfigModalOpen}
+        onClose={() => setChargeConfigModalOpen(false)}
+        onApply={() => setChargeConfigModalOpen(false)}
+        batteryType={chargeBatteryType}
+        voltage={chargeVoltage}
+        chargeCurrent={chargeCurrent}
+        batteryName={batteryName}
+        onBatteryTypeChange={setChargeBatteryType}
+        onVoltageChange={setChargeVoltage}
+        onChargeCurrentChange={setChargeCurrent}
+        onBatteryNameChange={setBatteryName}
+      />
+
       <ChargeDischargeModal
         isOpen={chargeModalOpen}
         onClose={() => setChargeModalOpen(false)}
         onSelect={(mode) => {
           setChargeModalOpen(false);
+          setOperationMode(mode);
           if (mode === "discharge") {
             setConfigModalOpen(true);
           } else if (mode === "charge") {
-            // Charge mode currently not supported — no action
+            setChargeConfigModalOpen(true);
           }
         }}
       />
-
-      <VariableComparisonSelector
-        isOpen={comparisonOpen}
-        onClose={() => setComparisonOpen(false)}
-        onApply={(cfg) => {
-          setComparisonConfig(cfg);
-          setComparisonOpen(false);
-        }}
-        currentSelections={comparisonConfig || {}}
-      />
-    </>
+    </section>
   );
 }
 

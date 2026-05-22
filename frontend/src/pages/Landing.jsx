@@ -4,17 +4,26 @@ import {
   ArrowLeft,
   ArrowRight,
   BatteryCharging,
-  Eye,
-  EyeOff,
+  ChevronLeft,
+  ChevronRight,
   Gauge,
   LineChart,
-  LockKeyhole,
   LoaderCircle,
+  LockKeyhole,
   Mail,
   UserRound,
   Zap
 } from "lucide-react";
 import ToastNotification from "../components/ToastNotification";
+import { authEnabled, sendPasswordReset } from "../firebaseClient";
+
+function BrandLogo({ size = 24 }) {
+  return (
+    <span className="brand-logo-mark landing-logo" aria-hidden="true">
+      <BatteryCharging size={size} strokeWidth={2.25} />
+    </span>
+  );
+}
 
 function Landing({ mode, onEnterApp, onShowLogin, onShowSignup, onBackHome, onAuthSubmit, authPending, authError }) {
   const isAuthMode = mode === "login" || mode === "signup";
@@ -23,7 +32,7 @@ function Landing({ mode, onEnterApp, onShowLogin, onShowSignup, onBackHome, onAu
     <div className="landing-root">
       <header className="landing-topnav">
         <div className="landing-brand">
-          <span className="landing-logo"><BatteryCharging size={24} /></span>
+          <BrandLogo size={24} />
           <strong>PowerProbe</strong>
         </div>
         <div className="landing-actions">
@@ -36,7 +45,7 @@ function Landing({ mode, onEnterApp, onShowLogin, onShowSignup, onBackHome, onAu
         </div>
       </header>
 
-      <main className="landing-main">
+      <main className={`landing-main ${isAuthMode ? "landing-main-auth" : "landing-main-carousel"}`}>
         {isAuthMode ? (
           <AuthPanel
             mode={mode}
@@ -47,128 +56,153 @@ function Landing({ mode, onEnterApp, onShowLogin, onShowSignup, onBackHome, onAu
             authError={authError}
           />
         ) : (
-          <Hero onEnterApp={onEnterApp} />
+          <FullPageCarousel onEnterApp={onEnterApp} onShowLogin={onShowLogin} />
         )}
       </main>
     </div>
   );
 }
 
-function Hero({ onEnterApp }) {
-  return (
-    <section className="landing-hero">
-      <div className="landing-copy">
-        <span className="landing-eyebrow"><Zap size={15} /> Cloud battery telemetry</span>
-        <h1>
-          Battery analytics
-          <span>for live and historical insights</span>
-        </h1>
-        <p>
-          Monitor live battery telemetry, inspect KPI charts, and explore historical records through flexible filters and CSV export.
-        </p>
-        <button className="landing-btn primary large" onClick={onEnterApp} type="button">
-          Open dashboard <ArrowRight size={17} />
-        </button>
-      </div>
+const HERO_SLIDES = [
+  {
+    eyebrow: "Live telemetry",
+    icon: Zap,
+    title: "Battery analytics",
+    highlight: "in real time",
+    description:
+      "Monitor voltage, current, temperature, SOC, and power on a live dashboard with six global charts plus custom chart builder.",
+    cta: "Open dashboard"
+  },
+  {
+    eyebrow: "Historical insights",
+    icon: LineChart,
+    title: "History analytics",
+    highlight: "with smart filters",
+    description:
+      "Filter sessions by battery, date range, and charge/discharge mode. Export CSV and visualize trends without clutter.",
+    cta: "Explore history"
+  },
+  {
+    eyebrow: "Charge & discharge",
+    icon: BatteryCharging,
+    title: "Configurable cycles",
+    highlight: "for your packs",
+    description:
+      "Set chemistry, voltage, and charge current—or run discharge profiles—then stream results to the dashboard instantly.",
+    cta: "Get started"
+  },
+  {
+    eyebrow: "Custom visualization",
+    icon: Activity,
+    title: "Build any chart",
+    highlight: "from telemetry",
+    description:
+      "Pick X and Y axes with intelligent chart recommendations, dual-axis support, and live updates as packets arrive.",
+    cta: "Try the demo"
+  }
+];
 
-      <PreviewCarousel />
-    </section>
-  );
-}
-
-function PreviewCarousel() {
+function FullPageCarousel({ onEnterApp, onShowLogin }) {
   const [activeIndex, setActiveIndex] = useState(0);
-  
-  const slides = [
-    {
-      title: "Live Battery Dashboard",
-      status: "Healthy",
-      metrics: [
-        { icon: Zap, label: "Voltage", value: "3.92 V" },
-        { icon: Activity, label: "Current", value: "8.10 A" },
-        { icon: Gauge, label: "SOH", value: "95.8%" }
-      ],
-      descTitle: "Realtime stream",
-      descText: "Firebase telemetry updates dashboard and history analytics instantly."
-    },
-    {
-      title: "Historical Analytics",
-      status: "Data Rich",
-      metrics: [
-        { icon: BatteryCharging, label: "Sessions", value: "248" },
-        { icon: Activity, label: "Avg Temp", value: "32.4 °C" },
-        { icon: LineChart, label: "Records", value: "14,592" }
-      ],
-      descTitle: "Deep Insights",
-      descText: "Filter by battery, date, and mode to uncover performance trends."
-    },
-    {
-      title: "Precision Simulation",
-      status: "Active",
-      metrics: [
-        { icon: Zap, label: "C Rating", value: "25 C" },
-        { icon: Activity, label: "Capacity", value: "2200 mAh" },
-        { icon: Eye, label: "Profile", value: "Drone" }
-      ],
-      descTitle: "Configurable Tests",
-      descText: "Run detailed simulation profiles directly against the hardware."
-    }
-  ];
+  const slideCount = HERO_SLIDES.length;
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setActiveIndex((current) => (current + 1) % slides.length);
-    }, 4000);
+      setActiveIndex((current) => (current + 1) % slideCount);
+    }, 5500);
     return () => clearInterval(timer);
-  }, [slides.length]);
+  }, [slideCount]);
+
+  function goTo(index) {
+    setActiveIndex((index + slideCount) % slideCount);
+  }
 
   return (
-    <div className="carousel-container" style={{ position: "relative", overflow: "hidden", borderRadius: "12px" }}>
-      <div 
-        className="carousel-track" 
-        style={{ 
-          display: "flex", 
-          transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)", 
-          transform: `translateX(-${activeIndex * 100}%)` 
-        }}
+    <section className="landing-carousel" aria-label="Product overview">
+      <div
+        className="landing-carousel-track"
+        style={{ transform: `translateX(-${activeIndex * 100}%)` }}
       >
-        {slides.map((slide, index) => (
-          <div key={index} style={{ minWidth: "100%", padding: "4px" }}>
-            <section className="landing-preview" aria-label="Dashboard preview">
-              <div className="preview-head">
-                <strong>{slide.title}</strong>
-                <span>{slide.status}</span>
-              </div>
-              <div className="preview-metrics">
-                {slide.metrics.map((m, i) => (
-                  <PreviewMetric key={i} icon={m.icon} label={m.label} value={m.value} />
-                ))}
-              </div>
-              <div className="preview-chart">
-                <LineChart size={56} />
-                <div>
-                  <strong>{slide.descTitle}</strong>
-                  <span>{slide.descText}</span>
+        {HERO_SLIDES.map((item, index) => {
+          const SlideIcon = item.icon;
+          return (
+            <article key={item.title} className="landing-slide" aria-hidden={index !== activeIndex}>
+              <div className="landing-slide-inner">
+                <div className="landing-slide-copy">
+                  <span className="landing-eyebrow">
+                    <SlideIcon size={15} /> {item.eyebrow}
+                  </span>
+                  <h1>
+                    {item.title}
+                    <span>{item.highlight}</span>
+                  </h1>
+                  <p>{item.description}</p>
+                  <div className="landing-slide-actions">
+                    <button className="landing-btn primary large" onClick={onEnterApp} type="button">
+                      {item.cta} <ArrowRight size={17} />
+                    </button>
+                    <button className="landing-btn ghost large" onClick={onShowLogin} type="button">
+                      Sign in
+                    </button>
+                  </div>
+                </div>
+                <div className="landing-slide-visual">
+                  <section className="landing-preview landing-preview-hero">
+                    <div className="preview-head">
+                      <strong>PowerProbe Preview</strong>
+                      <span>Slide {index + 1} of {slideCount}</span>
+                    </div>
+                    <div className="preview-metrics">
+                      <PreviewMetric icon={Zap} label="Voltage" value="12.4 V" />
+                      <PreviewMetric icon={Activity} label="Current" value="2.10 A" />
+                      <PreviewMetric icon={Gauge} label="SOC" value="78%" />
+                    </div>
+                    <div className="preview-chart">
+                      <SlideIcon size={48} />
+                      <div>
+                        <strong>{item.eyebrow}</strong>
+                        <span>{item.description}</span>
+                      </div>
+                    </div>
+                  </section>
                 </div>
               </div>
-            </section>
-          </div>
-        ))}
+            </article>
+          );
+        })}
       </div>
-      <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "16px" }}>
-        {slides.map((_, idx) => (
-          <button 
-            key={idx} 
-            onClick={() => setActiveIndex(idx)}
-            style={{ 
-              width: "8px", height: "8px", borderRadius: "50%", 
-              background: idx === activeIndex ? "#3b82f6" : "#cbd5e1", 
-              border: "none", cursor: "pointer", transition: "background 0.3s" 
-            }} 
-          />
-        ))}
+
+      <div className="landing-carousel-controls">
+        <button
+          type="button"
+          className="carousel-nav-btn"
+          onClick={() => goTo(activeIndex - 1)}
+          aria-label="Previous slide"
+        >
+          <ChevronLeft size={20} />
+        </button>
+        <div className="landing-carousel-dots">
+          {HERO_SLIDES.map((item, idx) => (
+            <button
+              key={item.title}
+              type="button"
+              className={idx === activeIndex ? "active" : ""}
+              onClick={() => goTo(idx)}
+              aria-label={`Go to slide ${idx + 1}`}
+              aria-current={idx === activeIndex}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          className="carousel-nav-btn"
+          onClick={() => goTo(activeIndex + 1)}
+          aria-label="Next slide"
+        >
+          <ChevronRight size={20} />
+        </button>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -183,19 +217,17 @@ function PreviewMetric({ icon: Icon, label, value }) {
 }
 
 function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, authError }) {
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    password: ""
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [toastError, setToastError] = useState(null);
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [toastMessage, setToastMessage] = useState(null);
+  const [toastType, setToastType] = useState("error");
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [resetPending, setResetPending] = useState(false);
   const isSignup = mode === "signup";
 
-  // Show toast when auth error changes
   useEffect(() => {
     if (authError) {
-      setToastError(authError);
+      setToastType("error");
+      setToastMessage(authError);
     }
   }, [authError]);
 
@@ -215,83 +247,148 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
     });
   }
 
+  async function handleForgotSubmit(event) {
+    event.preventDefault();
+    setResetPending(true);
+    setToastMessage(null);
+    try {
+      if (!authEnabled) {
+        throw new Error("Password reset is available when Firebase Auth is configured.");
+      }
+      await sendPasswordReset(form.email);
+      setToastType("success");
+      setToastMessage("Password reset email sent. Check your inbox.");
+      setForgotOpen(false);
+    } catch (error) {
+      setToastType("error");
+      setToastMessage(error instanceof Error ? error.message : "Could not send reset email.");
+    } finally {
+      setResetPending(false);
+    }
+  }
+
   return (
     <section className="auth-shell">
-      <ToastNotification 
-        message={toastError} 
-        type="error" 
-        duration={4000}
-        onClose={() => setToastError(null)}
+      <ToastNotification
+        message={toastMessage}
+        type={toastType}
+        duration={5000}
+        onClose={() => setToastMessage(null)}
       />
       <button className="landing-btn ghost back" onClick={onBackHome} type="button">
         <ArrowLeft size={16} /> Back
       </button>
-      <form className="auth-card" onSubmit={handleSubmit}>
-        <div>
-          <h1>{isSignup ? "Create account" : "Login"}</h1>
-          <p>{isSignup ? "Create a demo account to enter the dashboard." : "Use email and password for this."}</p>
-        </div>
 
-        {isSignup && (
+      {forgotOpen ? (
+        <form className="auth-card" onSubmit={handleForgotSubmit}>
+          <div>
+            <h1>Reset password</h1>
+            <p>Enter your account email and we will send a reset link.</p>
+          </div>
           <label>
-            Name
+            Email
             <span>
-              <UserRound size={17} />
-              <input value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder="User name" />
+              <Mail size={17} />
+              <input
+                type="email"
+                value={form.email}
+                onChange={(event) => updateField("email", event.target.value)}
+                placeholder="user@example.com"
+                required
+              />
             </span>
           </label>
-        )}
+          <button className="landing-btn primary large" type="submit" disabled={resetPending}>
+            {resetPending ? (
+              <>
+                <LoaderCircle size={17} className="button-spinner" />
+                Sending...
+              </>
+            ) : (
+              "Send reset link"
+            )}
+          </button>
+          <button className="auth-switch" onClick={() => setForgotOpen(false)} type="button">
+            Back to login
+          </button>
+        </form>
+      ) : (
+        <form className="auth-card" onSubmit={handleSubmit}>
+          <div className="auth-card-brand">
+            <BrandLogo size={28} />
+            <div>
+              <h1>{isSignup ? "Create account" : "Login"}</h1>
+              <p>{isSignup ? "Create an account to enter the dashboard." : "Sign in with your email and password."}</p>
+            </div>
+          </div>
 
-        <label>
-          Email
-          <span>
-            <Mail size={17} />
-            <input type="email" value={form.email} onChange={(event) => updateField("email", event.target.value)} placeholder="user@example.com" required />
-          </span>
-        </label>
-
-        <label>
-          Password
-          <span>
-            <LockKeyhole size={17} />
-            <input
-              type={showPassword ? "text" : "password"}
-              value={form.password}
-              onChange={(event) => updateField("password", event.target.value)}
-              placeholder="Password"
-              required
-            />
-            <button
-              className="password-toggle"
-              type="button"
-              onClick={() => setShowPassword((current) => !current)}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              title={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </span>
-          <small className="password-visibility">Password visible: {showPassword ? "Yes" : "No"}</small>
-        </label>
-
-        <button className="landing-btn primary large" type="submit" disabled={authPending}>
-          {authPending ? (
-            <>
-              <LoaderCircle size={17} className="button-spinner" />
-              Processing...
-            </>
-          ) : (
-            <>
-              {isSignup ? "Create account" : "Login"}
-              <ArrowRight size={17} />
-            </>
+          {isSignup && (
+            <label>
+              Name
+              <span>
+                <UserRound size={17} />
+                <input
+                  value={form.name}
+                  onChange={(event) => updateField("name", event.target.value)}
+                  placeholder="User name"
+                />
+              </span>
+            </label>
           )}
-        </button>
 
-        <button className="auth-switch" onClick={onSwitchMode} type="button">
-          {isSignup ? "Already have an account? Login" : "New here? Create account"}
-        </button>
-      </form>
+          <label>
+            Email
+            <span>
+              <Mail size={17} />
+              <input
+                type="email"
+                value={form.email}
+                onChange={(event) => updateField("email", event.target.value)}
+                placeholder="user@example.com"
+                required
+              />
+            </span>
+          </label>
+
+          <label>
+            Password
+            <span>
+              <LockKeyhole size={17} />
+              <input
+                type="password"
+                value={form.password}
+                onChange={(event) => updateField("password", event.target.value)}
+                placeholder="Password"
+                required
+              />
+            </span>
+          </label>
+
+          {!isSignup && (
+            <button className="forgot-password-link" onClick={() => setForgotOpen(true)} type="button">
+              Forgot password?
+            </button>
+          )}
+
+          <button className="landing-btn primary large" type="submit" disabled={authPending}>
+            {authPending ? (
+              <>
+                <LoaderCircle size={17} className="button-spinner" />
+                Processing...
+              </>
+            ) : (
+              <>
+                {isSignup ? "Create account" : "Login"}
+                <ArrowRight size={17} />
+              </>
+            )}
+          </button>
+
+          <button className="auth-switch" onClick={onSwitchMode} type="button">
+            {isSignup ? "Already have an account? Login" : "New here? Create account"}
+          </button>
+        </form>
+      )}
     </section>
   );
 }
