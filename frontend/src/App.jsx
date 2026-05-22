@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import Sidebar from "./components/Sidebar";
+import Header from "./components/Header";
 import { endSession, getHistorical, getProfiles, getSessions, sendPiCommand, startSession } from "./backendClient";
 import { appUser } from "./data/appConfig";
 import {
@@ -384,7 +384,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar 
+      <Header 
         activePage={activePage} 
         onPageChange={setActivePage} 
         currentUser={currentUser} 
@@ -392,7 +392,7 @@ function App() {
         theme={theme}
         onToggleTheme={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
       />
-      <main className="content">
+      <main className="app-content">
         {activePage === "dashboard" && (
           <Dashboard
             data={data}

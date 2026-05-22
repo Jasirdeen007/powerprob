@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LineChart as RLineChart, Line, AreaChart as RAreaChart, Area, BarChart as RBarChart, Bar, ScatterChart as RScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { LineChart as RLineChart, Line, AreaChart as RAreaChart, Area, BarChart as RBarChart, Bar, ScatterChart as RScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid } from "recharts";
 import { AreaChart, BarChart3, LineChart, ScatterChart, Activity, Dot, ActivitySquare, Donut } from "lucide-react";
 
 const COLORS = {
@@ -36,7 +36,7 @@ function getStatusColor(metric, value) {
   return COLORS.stable;
 }
 
-export default function TelemetryChartCard({ title, metricKey, unit, data }) {
+export default function TelemetryChartCard({ title, metricKey, unit, data, forceYRange, customAxisLabels }) {
   const chartOptions = {
     voltage: [
       { key: "line", Icon: LineChart, label: "Line Chart" },
@@ -73,14 +73,42 @@ export default function TelemetryChartCard({ title, metricKey, unit, data }) {
     ]
   };
 
+  // Determine Y-axis domain
+  const getYAxisDomain = () => {
+    if (forceYRange) {
+      return [forceYRange.min, forceYRange.max];
+    }
+    if (data.length === 0) return ["auto", "auto"];
+    const values = data.map(d => d[metricKey]).filter(Number.isFinite);
+    if (values.length === 0) return ["auto", "auto"];
+    const max = Math.max(...values);
+    return ["auto", max];
+  };
+
   const options = chartOptions[metricKey] || chartOptions.voltage;
   const [activeChart, setActiveChart] = useState(options[0].key);
 
-  const latestValue = data.length > 0 ? data[data.length - 1]?.[metricKey] ?? 0 : 0;
+  // Normalize data time values to numbers for Recharts
+  const processedData = data.map((d) => ({ ...d, time: typeof d.time === "number" ? d.time : Number(d.time) || 0 }));
+  const latestValue = processedData.length > 0 ? processedData[processedData.length - 1]?.[metricKey] ?? 0 : 0;
   const statusColor = getStatusColor(metricKey, latestValue);
 
+  // Get axis labels
+  const getAxisLabel = (type) => {
+    if (customAxisLabels && customAxisLabels[type]) {
+      return customAxisLabels[type];
+    }
+    if (type === "xlabel") {
+      return "Time (s)";
+    }
+    if (type === "ylabel") {
+      return `${title} (${unit})`;
+    }
+    return "";
+  };
+
   function renderChart() {
-    if (data.length === 0) return null;
+    if (processedData.length === 0) return null;
 
     if (activeChart === "donut" || activeChart === "ring" || activeChart === "radial") {
       const remaining = 100 - latestValue;
@@ -159,11 +187,26 @@ export default function TelemetryChartCard({ title, metricKey, unit, data }) {
       }
     })();
 
+    const yAxisDomain = getYAxisDomain();
+
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <ChartComponent data={data} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-          <XAxis dataKey="time" hide />
-          <YAxis domain={["auto", "auto"]} tick={{ fill: "var(--text-light)", fontSize: 10 }} tickLine={false} axisLine={false} />
+        <ChartComponent data={processedData} margin={{ top: 5, right: 10, left: 0, bottom: 20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis 
+            dataKey="time" 
+            tick={{ fill: "var(--text-light)", fontSize: 10 }} 
+            tickLine={false} 
+            axisLine={false}
+            label={{ value: getAxisLabel("xlabel"), position: "insideBottomRight", offset: -10, fill: "var(--text-light)", fontSize: 12 }}
+          />
+          <YAxis 
+            domain={yAxisDomain} 
+            tick={{ fill: "var(--text-light)", fontSize: 10 }} 
+            tickLine={false} 
+            axisLine={false}
+            label={{ value: getAxisLabel("ylabel"), angle: -90, position: "insideLeft", fill: "var(--text-light)", fontSize: 12 }}
+          />
           <Tooltip
             cursor={false}
             formatter={(value) => [Number(value).toFixed(2), title]}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Download, Filter, RotateCcw, BarChart3 } from "lucide-react";
+import { Download, Filter, RotateCcw, BarChart3, Settings } from "lucide-react";
 import DashboardCharts from "../components/DashboardCharts";
 
 const MODE_OPTIONS = ["CHARGE", "DISCHARGE", "IDLE"];
@@ -10,6 +10,7 @@ const PRESETS = [
   { key: "30d", label: "30 days" },
   { key: "custom", label: "Custom" }
 ];
+const RECORD_LIMITS = [10, 20, 100];
 
 function inferMode(reading, sessionType) {
   if (typeof sessionType === "string") {
@@ -78,6 +79,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
   const [customEnd, setCustomEnd] = useState("");
   const [selectedModes, setSelectedModes] = useState(MODE_OPTIONS);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [recordLimit, setRecordLimit] = useState(10);
 
   const records = useMemo(() => {
     const allRows = (data?.testSessions ?? []).flatMap((session) => {
@@ -144,7 +146,13 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
     });
   }, [batteryFilter, dateRange, records, selectedModes]);
 
-  const rowsForTable = hasFilters ? filteredRecords : records.slice(0, 10);
+  const rowsForTable = useMemo(() => {
+    if (hasFilters) {
+      return filteredRecords.slice(0, recordLimit);
+    }
+    return records.slice(0, recordLimit);
+  }, [filteredRecords, hasFilters, recordLimit, records]);
+
   const exportScopeLabel = hasFilters ? "Filtered dataset" : "Default: last 30 days";
 
   const csvRows = useMemo(() => {
@@ -479,9 +487,38 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
       )}
 
       <section className="panel history-results">
-        <div className="panel-head">
-          <h2>{hasFilters ? "Filtered Historical Records" : "Top 10 Recent Records"}</h2>
-          <span>{rowsForTable.length} records shown</span>
+        <div className="panel-head" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h2>{hasFilters ? "Filtered Historical Records" : "Top Recent Records"}</h2>
+          </div>
+          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Settings size={16} />
+              <span style={{ fontSize: "13px", fontWeight: "600", color: "#64748b" }}>Records per page:</span>
+              <div style={{ display: "flex", gap: "6px" }}>
+                {RECORD_LIMITS.map((limit) => (
+                  <button
+                    key={limit}
+                    onClick={() => setRecordLimit(limit)}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "6px",
+                      border: recordLimit === limit ? "2px solid #3b82f6" : "1px solid #dce3ec",
+                      background: recordLimit === limit ? "#eff6ff" : "#ffffff",
+                      color: recordLimit === limit ? "#2563eb" : "#64748b",
+                      cursor: "pointer",
+                      fontWeight: recordLimit === limit ? "700" : "600",
+                      fontSize: "12px",
+                      transition: "all 0.2s ease"
+                    }}
+                  >
+                    {limit}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <span style={{ fontSize: "12px", color: "#94a3b8" }}>{rowsForTable.length} shown</span>
+          </div>
         </div>
 
         {rowsForTable.length === 0 ? (
