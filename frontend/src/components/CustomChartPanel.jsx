@@ -146,8 +146,8 @@ export default function CustomChartPanel({ config, data, operationMode = "discha
               domain={y1Domain}
               tickFormatter={formatTick}
               tick={{ fill: "var(--text-main)", fontSize: 10 }}
-              tickLine={false}
-              axisLine={false}
+              tickLine={{ stroke: "var(--border-strong)" }}
+              axisLine={{ stroke: "var(--border-strong)" }}
               width={56}
             />
             {useDual ? (
@@ -157,8 +157,8 @@ export default function CustomChartPanel({ config, data, operationMode = "discha
                 domain={y2Domain}
                 tickFormatter={formatTick}
                 tick={{ fill: "var(--text-main)", fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
+                tickLine={{ stroke: "var(--border-strong)" }}
+                axisLine={{ stroke: "var(--border-strong)" }}
                 width={56}
               />
             ) : null}

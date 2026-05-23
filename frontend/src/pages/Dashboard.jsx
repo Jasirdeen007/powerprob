@@ -201,6 +201,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
     try {
       const response = await onStartSession?.({
         battery_id: activeBattery || selectedSession?.batteryId || "B0047",
+        battery_name: batteryName,
         config: buildSessionConfig()
       });
 

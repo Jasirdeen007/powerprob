@@ -55,6 +55,7 @@ async function readTestSessions(db) {
         return {
           sessionId: session.session_id ?? sessionDoc.id,
           batteryId: session.battery_id ?? sessionDoc.id.split("_").at(-1) ?? "UNKNOWN",
+          batteryName: session.battery_name ?? "",
           type: session.config?.discharge_profile ?? "discharge",
           startTime: session.started_at,
           status: session.status ?? "running",

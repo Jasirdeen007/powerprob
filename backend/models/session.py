@@ -25,6 +25,7 @@ class BatteryConfig(BaseModel):
 
 class SessionStartRequest(BaseModel):
     battery_id: str = Field(..., min_length=1)
+    battery_name: str | None = None
     config: BatteryConfig
 
 
@@ -42,6 +43,7 @@ class SessionEndRequest(BaseModel):
 class SessionRecord(BaseModel):
     session_id: str
     battery_id: str
+    battery_name: str | None = None
     config: BatteryConfig
     status: str
     started_at: datetime

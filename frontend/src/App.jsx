@@ -190,6 +190,7 @@ function App() {
         const backendSessions = (sessionsPayload.sessions ?? []).map((session) => ({
           sessionId: session.session_id,
           batteryId: session.battery_id,
+          batteryName: session.battery_name ?? "",
           type: session.config?.discharge_profile ?? "discharge",
           startTime: session.started_at,
           status: session.status,
@@ -390,6 +391,7 @@ function App() {
     const nextSession = {
       sessionId: response.session_id,
       batteryId: payload.battery_id,
+      batteryName: payload.battery_name ?? "",
       type: payload.config.discharge_profile,
       startTime: new Date().toISOString(),
       status: response.status,

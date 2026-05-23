@@ -26,7 +26,7 @@ function toIsoTimestamp(startTime, offsetSeconds) {
 
 function buildCsv(records) {
   const columns = [
-    "timestamp", "batteryId", "sessionId", "testId", "type", "uid",
+    "timestamp", "batteryId", "batteryName", "sessionId", "testId", "type", "uid",
     "ambientTemperature", "capacity", "re", "rct", "status", "sourceFile",
     "mode", "time", "voltage", "current", "temperature", "action"
   ];
@@ -66,6 +66,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
           timestamp,
           timestampMs: timestamp ? new Date(timestamp).getTime() : null,
           batteryId: session.batteryId,
+          batteryName: session.batteryName || "",
           sessionId: session.sessionId,
           testId: session.testId,
           type: session.type,
@@ -86,6 +87,29 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
       });
     });
     return allRows.filter((row) => Number.isFinite(row.timestampMs)).sort((a, b) => b.timestampMs - a.timestampMs);
+  }, [data]);
+
+  const batteryOptions = useMemo(() => {
+    const byId = new Map();
+    for (const battery of data?.batteries ?? []) {
+      byId.set(battery.batteryId, {
+        batteryId: battery.batteryId,
+        batteryName: battery.batteryName || battery.name || ""
+      });
+    }
+    for (const session of data?.testSessions ?? []) {
+      if (!session.batteryId) continue;
+      const current = byId.get(session.batteryId);
+      byId.set(session.batteryId, {
+        batteryId: session.batteryId,
+        batteryName: session.batteryName || current?.batteryName || ""
+      });
+    }
+    return Array.from(byId.values()).sort((a, b) => {
+      const labelA = a.batteryName || a.batteryId;
+      const labelB = b.batteryName || b.batteryId;
+      return labelA.localeCompare(labelB);
+    });
   }, [data]);
 
   const dateRange = useMemo(() => {
@@ -151,7 +175,11 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
 
   const activeFilterBadges = useMemo(() => {
     const badges = [];
-    if (batteryFilter !== "ALL") badges.push({ key: "battery", label: `Battery: ${batteryFilter}` });
+    if (batteryFilter !== "ALL") {
+      const battery = batteryOptions.find((item) => item.batteryId === batteryFilter);
+      const label = battery?.batteryName ? `${battery.batteryName} (${battery.batteryId})` : batteryFilter;
+      badges.push({ key: "battery", label: `Battery: ${label}` });
+    }
     if (preset !== "NONE") {
       const presetLabel = PRESETS.find((item) => item.key === preset)?.label ?? preset;
       if (preset === "custom") {
@@ -162,7 +190,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
     }
     if (hasModeFilter) badges.push({ key: "mode", label: selectedModes.join(", ") });
     return badges;
-  }, [batteryFilter, hasModeFilter, preset, selectedModes]);
+  }, [batteryFilter, batteryOptions, hasModeFilter, preset, selectedModes]);
 
   function exportCsv() {
     const csv = buildCsv(csvRows);
@@ -211,7 +239,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
       <HistoryFilters
         batteryFilter={batteryFilter}
         onBatteryFilterChange={(v) => { setBatteryFilter(v); onBatteryChange?.(v); }}
-        batteries={data?.batteries ?? []}
+        batteries={batteryOptions}
         preset={preset}
         onPresetChange={setDatePreset}
         customStart={customStart}
@@ -270,7 +298,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
                   {rowsForTable.map((row) => (
                     <tr key={`${row.sessionId}-${row.time}-${row.timestamp}`}>
                       <td>{row.timestamp}</td>
-                      <td>{row.batteryId}</td>
+                      <td>{row.batteryName ? `${row.batteryName} (${row.batteryId})` : row.batteryId}</td>
                       <td><span className={`history-mode mode-${row.mode.toLowerCase()}`}>{row.mode}</span></td>
                       <td>{Number(row.voltage).toFixed(3)}</td>
                       <td>{Number(row.current).toFixed(3)}</td>

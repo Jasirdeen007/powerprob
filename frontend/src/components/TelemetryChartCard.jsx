@@ -193,9 +193,9 @@ export default function TelemetryChartCard({
             domain={yDomain}
             tickFormatter={formatTick}
             tick={{ fill: "var(--text-main)", fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            width={40}
+            tickLine={{ stroke: "var(--border-strong)" }}
+            axisLine={{ stroke: "var(--border-strong)" }}
+            width={48}
           />
           <Tooltip
             cursor={false}

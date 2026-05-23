@@ -56,7 +56,9 @@ function HistoryFilters({
           <select value={batteryFilter} onChange={(e) => onBatteryFilterChange(e.target.value)}>
             <option value="ALL">All batteries</option>
             {batteries.map((battery) => (
-              <option key={battery.batteryId} value={battery.batteryId}>{battery.batteryId}</option>
+              <option key={battery.batteryId} value={battery.batteryId}>
+                {battery.batteryName ? `${battery.batteryName} (${battery.batteryId})` : battery.batteryId}
+              </option>
             ))}
           </select>
         </div>

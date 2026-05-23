@@ -22,6 +22,7 @@ async def start_session(request: SessionStartRequest) -> dict:
     record = {
         "session_id": session_id,
         "battery_id": request.battery_id.strip().upper(),
+        "battery_name": request.battery_name.strip() if request.battery_name else "",
         "config": request.config.model_dump(),
         "status": "running",
         "started_at": datetime.now(UTC).isoformat(),
