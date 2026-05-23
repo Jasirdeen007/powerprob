@@ -50,6 +50,10 @@ export function sendPiCommand({ type, sessionId, command = {} }) {
   });
 }
 
+export function getPiStatus() {
+  return request("/pi/status");
+}
+
 export function getHistorical(sessionId, { from, to } = {}) {
   const params = new URLSearchParams({ session_id: sessionId });
   if (from) params.set("from", from);

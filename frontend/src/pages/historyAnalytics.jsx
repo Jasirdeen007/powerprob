@@ -8,11 +8,12 @@ const RECORD_LIMITS = [10, 20, 100];
 function inferMode(reading, sessionType) {
   if (typeof sessionType === "string") {
     const lower = sessionType.toLowerCase();
-    if (lower.includes("charge")) return "CHARGE";
     if (lower.includes("discharge")) return "DISCHARGE";
+    if (lower.includes("charge") || lower.includes("chg") || lower.includes("balance")) return "CHARGE";
+    if (lower.includes("pulse")) return "DISCHARGE";
   }
-  if (reading.current > 0.2) return "CHARGE";
-  if (reading.current < -0.2) return "DISCHARGE";
+  if (reading.current > 0.2) return "DISCHARGE";
+  if (reading.current < -0.2) return "CHARGE";
   return "IDLE";
 }
 
@@ -88,7 +89,8 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
   }, [data]);
 
   const dateRange = useMemo(() => {
-    const now = Date.now();
+    const latestRecordTime = records[0]?.timestampMs;
+    const now = Number.isFinite(latestRecordTime) ? latestRecordTime : Date.now();
     if (preset === "24h") return { start: now - 86400000, end: now };
     if (preset === "7d") return { start: now - 7 * 86400000, end: now };
     if (preset === "30d") return { start: now - 30 * 86400000, end: now };
@@ -98,7 +100,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
       return { start: Number.isFinite(start) ? start : null, end: Number.isFinite(end) ? end : null };
     }
     return null;
-  }, [customEnd, customStart, preset]);
+  }, [customEnd, customStart, preset, records]);
 
   const hasModeFilter = selectedModes.length !== MODE_OPTIONS.length;
   const hasDateFilter = preset !== "NONE";

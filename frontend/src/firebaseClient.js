@@ -93,7 +93,10 @@ function backendTelemetryToReading(packet, startedAt) {
     current: Number(packet.current ?? 0),
     temperature: Number(packet.temperature?.battery ?? 0),
     action: packet.event ?? "",
-    timestamp: packet.timestamp
+    timestamp: packet.timestamp,
+    soc: Number(packet.derived?.soc ?? NaN),
+    soh: Number(packet.derived?.soh ?? NaN),
+    rul: Number(packet.derived?.rul ?? NaN)
   };
 }
 

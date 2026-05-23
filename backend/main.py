@@ -31,7 +31,8 @@ app.include_router(websocket_router)
 @app.middleware("http")
 async def log_requests(request, call_next):
     response = await call_next(request)
-    logger.info("%s %s -> %s", request.method, request.url.path, response.status_code)
+    if request.url.path not in {"/health", "/pi/status"}:
+        logger.info("%s %s -> %s", request.method, request.url.path, response.status_code)
     return response
 
 

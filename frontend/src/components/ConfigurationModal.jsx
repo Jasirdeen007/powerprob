@@ -56,6 +56,18 @@ function ConfigurationModal({
     }
   }
 
+  function handleDroneProfileChange(nextProfile) {
+    setLocalDroneProfile(nextProfile);
+    const specs = profileSpecs[nextProfile];
+    if (!specs) return;
+
+    setLocalCRating(specs.cRating);
+    setLocalBatteryType(specs.batteryType);
+    setLocalMah(specs.mah);
+    setLocalNumCells(specs.numCells);
+    setLocalVoltage(specs.voltage);
+  }
+
   const handleApply = () => {
     onCRatingChange(localCRating);
     onBatteryTypeChange(localBatteryType);
@@ -173,7 +185,7 @@ function ConfigurationModal({
             <h3>Drone Profile</h3>
             <div className="config-field">
               <label>Select Drone Profile</label>
-              <select value={localDroneProfile} onChange={(e) => setLocalDroneProfile(e.target.value)}>
+              <select value={localDroneProfile} onChange={(e) => handleDroneProfileChange(e.target.value)}>
                 {profileOptions.map((profile) => (
                   <option key={profile.value} value={profile.value}>
                     {profile.label}

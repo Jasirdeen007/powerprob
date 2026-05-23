@@ -70,6 +70,11 @@ async def send_pi_command(command: CommandPayload):
     return {"sent": sent, "command": payload}
 
 
+@router.get("/pi/status")
+async def get_pi_status():
+    return pi_ws_manager.status()
+
+
 @router.websocket("/ws/pi")
 async def pi_websocket(websocket: WebSocket):
     await pi_ws_manager.connect(websocket)

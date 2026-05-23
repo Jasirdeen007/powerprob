@@ -20,7 +20,6 @@ class DerivedMetrics(BaseModel):
     soc: float
     soh: float
     rul: float
-    ir: float | None = None
 
 
 class TelemetryPacket(BaseModel):

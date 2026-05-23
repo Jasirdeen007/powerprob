@@ -9,7 +9,7 @@ function BrandLogo({ size = 22 }) {
   );
 }
 
-function Header({ activePage, onPageChange, currentUser, onLogout, theme, onToggleTheme }) {
+function Header({ activePage, onPageChange, currentUser, onLogout, theme, onToggleTheme, piStatus }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileRef = useRef(null);
@@ -61,9 +61,9 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
         </nav>
 
         <div className="header-actions">
-          <div className="live-status">
+          <div className={`live-status ${piStatus?.connected ? "connected" : "unavailable"}`}>
             <span className="status-dot" />
-            <span>LIVE</span>
+            <span>{piStatus?.connected ? "Pi Connected" : "Pi Unavailable"}</span>
           </div>
 
           <div className="header-profile-menu" ref={profileRef}>

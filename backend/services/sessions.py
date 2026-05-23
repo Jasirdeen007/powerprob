@@ -65,3 +65,12 @@ def list_all_sessions() -> list[dict]:
     if firebase_sessions:
         return firebase_sessions
     return list(local_sessions.values())
+
+
+def get_session_capacity_ah(session_id: str) -> float | None:
+    config = local_sessions.get(session_id, {}).get("config", {})
+    capacity = config.get("capacity_ah")
+    try:
+        return float(capacity)
+    except (TypeError, ValueError):
+        return None

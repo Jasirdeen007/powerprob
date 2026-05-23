@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Header from "./components/Header";
-import { endSession, getHistorical, getProfiles, getSessions, sendPiCommand, startSession } from "./backendClient";
+import { endSession, getHistorical, getPiStatus, getProfiles, getSessions, sendPiCommand, startSession } from "./backendClient";
 import { appUser } from "./data/appConfig";
 import {
   authEnabled,
@@ -26,7 +26,11 @@ function backendPacketToReading(packet, startedAt) {
     voltage: Number(packet.pack_voltage ?? 0),
     current: Number(packet.current ?? 0),
     temperature: Number(packet.temperature?.battery ?? 0),
-    action: packet.event ?? ""
+    action: packet.event ?? "",
+    soc: Number(packet.derived?.soc ?? NaN),
+    soh: Number(packet.derived?.soh ?? NaN),
+    rul: Number(packet.derived?.rul ?? NaN),
+    timestamp: packet.timestamp
   };
 }
 
@@ -85,6 +89,23 @@ function mergeLiveReadings(currentLiveReadings, incomingLiveReadings) {
   return merged;
 }
 
+function mergeSessions(currentSessions = [], incomingSessions = []) {
+  const byId = new Map(currentSessions.map((session) => [session.sessionId, session]));
+  for (const incoming of incomingSessions) {
+    const current = byId.get(incoming.sessionId);
+    byId.set(incoming.sessionId, {
+      ...current,
+      ...incoming,
+      readings: incoming.readings?.length > 0 ? incoming.readings : current?.readings ?? []
+    });
+  }
+  return Array.from(byId.values()).sort((a, b) => {
+    const bTime = new Date(b.startTime ?? 0).getTime();
+    const aTime = new Date(a.startTime ?? 0).getTime();
+    return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+  });
+}
+
 function App() {
   const initialBattery = localDemoData.batteries[0]?.batteryId ?? "B0047";
   const [data, setData] = useState(makeStaticInitialData);
@@ -99,6 +120,11 @@ function App() {
   const [profiles, setProfiles] = useState([]);
   const [historicalLoaded, setHistoricalLoaded] = useState({});
   const [theme, setTheme] = useState("light");
+  const [piStatus, setPiStatus] = useState({
+    connected: false,
+    transport: "websocket",
+    endpoint: "/ws/pi"
+  });
 
   useEffect(() => {
     if (theme === "dark") {
@@ -174,7 +200,7 @@ function App() {
         if (backendSessions.length > 0) {
           setData((current) => ({
             ...current,
-            testSessions: backendSessions
+            testSessions: mergeSessions(current?.testSessions ?? [], backendSessions)
           }));
         }
       } catch (error) {
@@ -186,6 +212,34 @@ function App() {
 
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshPiStatus() {
+      try {
+        const status = await getPiStatus();
+        if (!cancelled) {
+          setPiStatus(status);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPiStatus({
+            connected: false,
+            transport: "websocket",
+            endpoint: "/ws/pi"
+          });
+        }
+      }
+    }
+
+    refreshPiStatus();
+    const intervalId = window.setInterval(refreshPiStatus, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
     };
   }, []);
 
@@ -233,33 +287,50 @@ function App() {
   useEffect(() => {
     if (activePage !== "traceability" || !data?.testSessions?.length) return undefined;
 
-    const session = data.testSessions.find((item) => item.batteryId === selectedBattery) ?? data.testSessions[0];
-    if (!session?.sessionId || session.readings?.length > 0 || historicalLoaded[session.sessionId]) return undefined;
+    const sessionsToLoad = data.testSessions.filter((session) => (
+      session?.sessionId &&
+      session.sourceFile === "backend" &&
+      !(session.readings?.length > 0) &&
+      !historicalLoaded[session.sessionId]
+    ));
+    if (sessionsToLoad.length === 0) return undefined;
 
     let cancelled = false;
-    getHistorical(session.sessionId)
-      .then((payload) => {
-        if (cancelled) return;
-        const readings = (payload.packets ?? [])
-          .map((packet) => backendPacketToReading(packet, session.startTime))
-          .sort((a, b) => a.time - b.time);
-
-        setData((current) => ({
-          ...current,
-          testSessions: (current?.testSessions ?? []).map((item) => (
-            item.sessionId === session.sessionId ? { ...item, readings } : item
-          ))
-        }));
-        setHistoricalLoaded((current) => ({ ...current, [session.sessionId]: true }));
-      })
-      .catch((error) => {
-        console.warn("Historical telemetry load failed.", error);
-      });
+    Promise.all(
+      sessionsToLoad.map((session) => (
+        getHistorical(session.sessionId)
+          .then((payload) => ({
+            sessionId: session.sessionId,
+            readings: (payload.packets ?? [])
+              .map((packet) => backendPacketToReading(packet, session.startTime))
+              .sort((a, b) => a.time - b.time)
+          }))
+          .catch((error) => {
+            console.warn(`Historical telemetry load failed for ${session.sessionId}.`, error);
+            return { sessionId: session.sessionId, readings: [] };
+          })
+      ))
+    ).then((results) => {
+      if (cancelled) return;
+      const readingsBySession = new Map(results.map((result) => [result.sessionId, result.readings]));
+      setData((current) => ({
+        ...current,
+        testSessions: (current?.testSessions ?? []).map((item) => (
+          readingsBySession.has(item.sessionId)
+            ? { ...item, readings: readingsBySession.get(item.sessionId) ?? [] }
+            : item
+        ))
+      }));
+      setHistoricalLoaded((current) => ({
+        ...current,
+        ...Object.fromEntries(results.map((result) => [result.sessionId, true]))
+      }));
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [activePage, data?.testSessions, historicalLoaded, selectedBattery]);
+  }, [activePage, data?.testSessions, historicalLoaded]);
 
   async function handleAuthSubmit(userDetails) {
     setAuthError("");
@@ -382,7 +453,7 @@ function App() {
   const livePoint = {
     ...live,
     ...point,
-    soc: Math.round(clamp(((point.voltage - 3) / 1.25) * 100, 0, 100)),
+    soc: Number.isFinite(point.soc) ? point.soc : Math.round(clamp(((point.voltage - 3) / 1.25) * 100, 0, 100)),
     status: point.temperature >= 45 ? "critical" : point.temperature >= 38 ? "warning" : live.status
   };
 
@@ -395,6 +466,7 @@ function App() {
         onLogout={handleLogout} 
         theme={theme}
         onToggleTheme={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
+        piStatus={piStatus}
       />
       <main className="app-content">
         {activePage === "dashboard" && (
@@ -408,6 +480,7 @@ function App() {
             onStartSession={handleStartSession}
             onEndSession={handleEndSession}
             onPauseSession={handlePauseSession}
+            piConnected={piStatus.connected}
           />
         )}
         {activePage === "traceability" && (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Activity, Flame, Gauge, Play, Pause, Square, Zap, BatteryFull, Settings } from "lucide-react";
 import MetricCard from "../components/MetricCard";
 import TelemetryChartCard from "../components/TelemetryChartCard";
@@ -6,12 +6,82 @@ import ConfigurationModal from "../components/ConfigurationModal";
 import ChargeConfigurationModal from "../components/ChargeConfigurationModal";
 import ChargeDischargeModal from "../components/ChargeDischargeModal";
 import CustomChartBuilder from "../components/CustomChartBuilder";
-import { statusLabel } from "../data/appConfig";
 import { clamp } from "../lib/battery";
 
 import demoData from "../demo-data.json";
 
-function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, profiles = [], onStartSession, onEndSession, onPauseSession }) {
+const SOH_EOL_PERCENT = 80;
+const DESIGN_CYCLE_LIFE = 500;
+
+function getTemperatureStatus(temperature) {
+  if (temperature >= 45) return { status: "critical", tone: "danger", label: "Critical >= 45 C" };
+  if (temperature >= 38) return { status: "warning", tone: "warn", label: "Warning >= 38 C" };
+  return { status: "healthy", tone: "good", label: "Normal < 38 C" };
+}
+
+function getElapsedSeconds(current, previous) {
+  if (!previous) return 0;
+  const timeDelta = Number(current.time) - Number(previous.time);
+  if (Number.isFinite(timeDelta) && timeDelta >= 0) return timeDelta;
+
+  const currentMs = new Date(current.timestamp).getTime();
+  const previousMs = new Date(previous.timestamp).getTime();
+  if (Number.isFinite(currentMs) && Number.isFinite(previousMs)) {
+    return Math.max(0, (currentMs - previousMs) / 1000);
+  }
+
+  return 1;
+}
+
+function calculateDerivedReadings(sourceReadings, { capacityAh, operationMode, completedCycles = 1 }) {
+  let soc = 100;
+  let cycleDischargeAh = 0;
+  let measuredCapacityAh = capacityAh;
+
+  return sourceReadings.map((reading, index, list) => {
+    const previous = list[index - 1];
+    const dt = getElapsedSeconds(reading, previous);
+    const rawCurrent = Number(reading.current) || 0;
+    const dischargeCurrent = operationMode === "charge" ? -Math.abs(rawCurrent) : Math.abs(rawCurrent);
+
+    if (Number.isFinite(reading.soc)) {
+      soc = reading.soc;
+    } else if (capacityAh > 0 && dt > 0) {
+      soc = clamp(soc - ((dischargeCurrent * dt) / (3600 * capacityAh)) * 100, 0, 100);
+    }
+
+    if (dischargeCurrent > 0 && dt > 0) {
+      cycleDischargeAh += (dischargeCurrent * dt) / 3600;
+    }
+
+    if (cycleDischargeAh > 0) {
+      measuredCapacityAh = (0.2 * cycleDischargeAh) + (0.8 * measuredCapacityAh);
+    }
+
+    const soh = Number.isFinite(reading.soh)
+      ? reading.soh
+      : clamp((measuredCapacityAh / capacityAh) * 100, 0, 100);
+    const sohDrop = Math.max(0, 100 - soh);
+    const degradationPerCycle = completedCycles >= 5 && sohDrop > 0
+      ? sohDrop / completedCycles
+      : (100 - SOH_EOL_PERCENT) / DESIGN_CYCLE_LIFE;
+    const rul = Number.isFinite(reading.rul)
+      ? reading.rul
+      : soh <= SOH_EOL_PERCENT ? 0 : Math.max(0, (soh - SOH_EOL_PERCENT) / degradationPerCycle);
+
+    return {
+      ...reading,
+      soc: Number(soc.toFixed(1)),
+      soh: Number(soh.toFixed(1)),
+      rul: Number(rul.toFixed(1)),
+      power: Number((reading.voltage * reading.current).toFixed(2)),
+      thermalLimit: 38,
+      criticalLimit: 45
+    };
+  });
+}
+
+function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, profiles = [], onStartSession, onEndSession, onPauseSession, piConnected = false }) {
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [chargeConfigModalOpen, setChargeConfigModalOpen] = useState(false);
   const [operationMode, setOperationMode] = useState("discharge");
@@ -43,7 +113,8 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
     temperature: Number(r.temperature) || 0
   }));
 
-  const fullReadings = selectedSession?.readings ?? ((!useDemo && (liveStream?.length > 0)) ? liveStream : demoReadings);
+  const sessionReadings = selectedSession?.readings?.length > 0 ? selectedSession.readings : null;
+  const fullReadings = sessionReadings ?? ((!useDemo && (liveStream?.length > 0)) ? liveStream : demoReadings);
   const usingDemo = fullReadings === demoReadings;
 
   const profileSpecs = {
@@ -53,42 +124,46 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
     "Inspection Quad": { cRating: "15", batteryType: "Li-ion", mah: "8000", numCells: "4", voltage: "14.8" }
   };
 
-  useEffect(() => {
-    if (operationMode !== "discharge") return;
-    const specs = profileSpecs[droneProfile];
-    if (specs) {
-      setCRating(specs.cRating);
-      setBatteryType(specs.batteryType);
-      setMah(specs.mah);
-      setNumCells(specs.numCells);
-      setVoltage(specs.voltage);
-    }
-  }, [droneProfile, operationMode]);
-
   const point = fullReadings.at(-1) ?? fullReadings[0] ?? livePoint;
+  const dashboardConfig = operationMode === "charge"
+    ? {
+      title: "Charge Configuration",
+      fields: [
+        ["Battery", batteryName || "Unnamed pack"],
+        ["Chemistry", chargeBatteryType],
+        ["Mode", "Balance charge"],
+        ["Pack voltage", `${chargeVoltage || "0"} V`],
+        ["Charge current", `${chargeCurrent || "0"} A`]
+      ]
+    }
+    : {
+      title: "Discharge Configuration",
+      fields: [
+        ["Battery", batteryName || "Unnamed pack"],
+        ["Chemistry", batteryType],
+        ["Profile", droneProfile],
+        ["C Rating", `${cRating || "0"}C`],
+        ["Capacity", `${mah || "0"} mAh`],
+        ["Cells", `${numCells || "0"}S`],
+        ["Pack voltage", `${voltage || "0"} V`]
+      ]
+    };
 
+  const ratedCapacityAh = operationMode === "charge"
+    ? Math.max(0.1, Number(chargeCurrent) || 2.2)
+    : Math.max(0.1, (Number(mah) || 2200) / 1000);
+  const readings = calculateDerivedReadings(fullReadings, {
+    capacityAh: ratedCapacityAh,
+    operationMode,
+    completedCycles: Number(selectedSession?.completedCycles) || 1
+  });
+  const latestReading = readings.at(-1) ?? readings[0] ?? point;
+  const temperatureStatus = getTemperatureStatus(Number(latestReading.temperature) || 0);
   const activeLivePoint = {
     ...livePoint,
-    ...point,
-    soc: Math.round(clamp(((point.voltage - 3) / 1.25) * 100, 0, 100)),
-    status: point.temperature >= 45 ? "critical" : point.temperature >= 38 ? "warning" : livePoint.status
+    ...latestReading,
+    status: temperatureStatus.status
   };
-
-  const readings = fullReadings.map((reading, index, list) => {
-    const computedSoc = Math.round(clamp(100 - (index / Math.max(1, list.length)) * 75, 0, 100));
-    const computedSoh = Number((99.5 - (index / Math.max(1, list.length)) * 4.2).toFixed(2));
-    return {
-      ...reading,
-      soc: computedSoc,
-      soh: computedSoh,
-      power: Number((reading.voltage * reading.current).toFixed(2)),
-      thermalLimit: 38,
-      criticalLimit: 45
-    };
-  });
-
-  const powerValue = activeLivePoint.voltage * activeLivePoint.current;
-  const tone = activeLivePoint.status === "critical" ? "danger" : activeLivePoint.status === "warning" ? "warn" : "good";
 
   const profileDescriptions = {
     "Surveillance Drone": "Surveillance Drone: Hover, camera sweep, return, and controlled landing",
@@ -131,7 +206,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
 
       setActiveSessionId(response?.session_id ?? "");
       setIsRunning(true);
-      setUseDemo(false);
+      setUseDemo(!response?.command_sent);
       setIsPaused(false);
     } catch (error) {
       setSessionError(error instanceof Error ? error.message : "Could not start session.");
@@ -238,33 +313,45 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
         </div>
       )}
 
+      <section className="dashboard-config-summary">
+        <div>
+          <p className="dashboard-config-eyebrow">Applied setup</p>
+          <h2>{dashboardConfig.title}</h2>
+        </div>
+        <div className="dashboard-config-grid">
+          {dashboardConfig.fields.map(([label, value]) => (
+            <div className="dashboard-config-item" key={label}>
+              <span>{label}</span>
+              <strong>{value}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <div className="instrument-panel-header">
         <div>
           <h2>Instrument Panel</h2>
           <p>Live battery telemetry diagnostics</p>
-        </div>
-        <div className="header-status">
-          <span className={`status-badge ${activeLivePoint.status}`}>{statusLabel[activeLivePoint.status]}</span>
         </div>
       </div>
 
       <div className="metrics-row">
         <MetricCard icon={Zap} label="Voltage" value={`${activeLivePoint.voltage.toFixed(2)} V`} detail="active bus" tone="good" />
         <MetricCard icon={Activity} label="Current" value={`${activeLivePoint.current.toFixed(2)} A`} detail="realtime draw" tone="good" />
-        <MetricCard icon={Flame} label="Temperature" value={`${activeLivePoint.temperature.toFixed(1)} °C`} detail="thermal state" tone={tone} />
+        <MetricCard icon={Flame} label="Temperature" value={`${activeLivePoint.temperature.toFixed(1)} C`} detail={temperatureStatus.label} tone={temperatureStatus.tone} />
       </div>
 
       <div className="metrics-row">
-        <MetricCard icon={BatteryFull} label="SOC" value={`${(readings[readings.length - 1]?.soc ?? 100)}%`} detail="charge level" tone="good" />
-        <MetricCard icon={Gauge} label="SOH" value={`${(readings[readings.length - 1]?.soh ?? 100.0).toFixed(1)}%`} detail="health status" tone="good" />
-        <MetricCard icon={Zap} label="Power" value={`${powerValue.toFixed(1)} W`} detail="power draw" tone="good" />
+        <MetricCard icon={BatteryFull} label="SOC" value={`${(latestReading?.soc ?? 100).toFixed(1)}%`} detail="coulomb counting" tone="good" />
+        <MetricCard icon={Gauge} label="SOH" value={`${(latestReading?.soh ?? 100.0).toFixed(1)}%`} detail="capacity estimate" tone="good" />
+        <MetricCard icon={Gauge} label="RUL" value={`${Math.round(latestReading?.rul ?? 0)} cycles`} detail="to 80% SOH" tone="good" />
       </div>
 
       <section className="global-charts-section">
         <div className="global-charts-head">
           <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
             <h2>Global Telemetry</h2>
-            {usingDemo && <span className="demo-badge">Demo data</span>}
+            {usingDemo && <span className="demo-badge">{piConnected ? "Demo data" : "Mock data"}</span>}
           </div>
           <p>Six live charts — axes adapt to {operationMode} operating range</p>
         </div>

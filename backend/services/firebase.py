@@ -10,6 +10,7 @@ from firebase_admin import credentials, db, firestore
 from services.config import settings
 
 logger = logging.getLogger(__name__)
+local_telemetry: dict[str, list[dict[str, Any]]] = {}
 
 
 def firebase_available() -> bool:
@@ -53,6 +54,7 @@ def write_latest_telemetry(session_id: str, packet: dict[str, Any]) -> bool:
 
 
 def append_telemetry(session_id: str, packet: dict[str, Any]) -> bool:
+    local_telemetry.setdefault(session_id, []).append(packet)
     try:
         client = get_firestore_client()
         if not client:
@@ -106,17 +108,37 @@ def list_sessions() -> list[dict[str, Any]]:
 
 
 def query_historical(session_id: str, start: str | None, end: str | None) -> list[dict[str, Any]]:
+    def within_range(packet: dict[str, Any]) -> bool:
+        timestamp = packet.get("timestamp")
+        if not timestamp:
+            return False
+        if start and timestamp < start:
+            return False
+        if end and timestamp > end:
+            return False
+        return True
+
     try:
         client = get_firestore_client()
         if not client:
-            return []
+            return sorted(
+                [packet for packet in local_telemetry.get(session_id, []) if within_range(packet)],
+                key=lambda packet: packet.get("timestamp", ""),
+            )
 
         query = client.collection("sessions").document(session_id).collection("telemetry")
         if start:
             query = query.where("timestamp", ">=", start)
         if end:
             query = query.where("timestamp", "<=", end)
-        return [doc.to_dict() for doc in query.order_by("timestamp").stream()]
+        packets = [doc.to_dict() for doc in query.order_by("timestamp").stream()]
+        return packets or sorted(
+            [packet for packet in local_telemetry.get(session_id, []) if within_range(packet)],
+            key=lambda packet: packet.get("timestamp", ""),
+        )
     except Exception as error:
         logger.warning("Failed to query historical telemetry from Firestore: %s", error)
-        return []
+        return sorted(
+            [packet for packet in local_telemetry.get(session_id, []) if within_range(packet)],
+            key=lambda packet: packet.get("timestamp", ""),
+        )

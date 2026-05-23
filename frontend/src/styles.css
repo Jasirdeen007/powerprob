@@ -2286,12 +2286,21 @@ h3 {
   font-size: 12px;
 }
 
+.live-status.unavailable {
+  background: rgba(239, 68, 68, 0.14);
+  color: #ef4444;
+}
+
 .status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: #15915b;
   animation: pulse 1.5s infinite;
+}
+
+.live-status.unavailable .status-dot {
+  background: #ef4444;
 }
 
 @keyframes pulse {
@@ -2637,6 +2646,62 @@ h3 {
   color: #1b5e20;
   font-size: 13px;
   margin-bottom: 16px;
+}
+
+.dashboard-config-summary {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.45fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border-main);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.dashboard-config-summary h2 {
+  margin: 2px 0 0;
+  color: var(--text-main);
+}
+
+.dashboard-config-eyebrow {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dashboard-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.dashboard-config-item {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+
+.dashboard-config-item span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dashboard-config-item strong {
+  min-width: 0;
+  color: var(--text-main);
+  font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
 .instrument-panel-header {
@@ -3082,6 +3147,10 @@ h3 {
 
 @media (max-width: 768px) {
   .metrics-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-config-summary {
     grid-template-columns: 1fr;
   }
 
