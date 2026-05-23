@@ -24,3 +24,5 @@ __pycache__/
 backend/.pytest_cache/
 *.pyc
 backend/logs/
+BMS_Dashboard_Redesign_Prompt.md
+BMS_Backend_Architecture_Documentation.docx
