@@ -104,21 +104,31 @@ const HERO_SLIDES = [
 
 function FullPageCarousel({ onEnterApp, onShowLogin }) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isInteracting, setIsInteracting] = useState(false);
   const slideCount = HERO_SLIDES.length;
 
   useEffect(() => {
+    if (isInteracting) return undefined;
     const timer = setInterval(() => {
       setActiveIndex((current) => (current + 1) % slideCount);
-    }, 5500);
+    }, 8000);
     return () => clearInterval(timer);
-  }, [slideCount]);
+  }, [isInteracting, slideCount]);
 
   function goTo(index) {
     setActiveIndex((index + slideCount) % slideCount);
+    setIsInteracting(true);
+    window.setTimeout(() => setIsInteracting(false), 9000);
   }
 
   return (
-    <section className="landing-carousel" aria-label="Product overview">
+    <section
+      className="landing-carousel"
+      aria-label="Product overview"
+      onPointerDown={() => setIsInteracting(true)}
+      onPointerLeave={() => setIsInteracting(false)}
+      onPointerUp={() => window.setTimeout(() => setIsInteracting(false), 3000)}
+    >
       <div
         className="landing-carousel-track"
         style={{ transform: `translateX(-${activeIndex * 100}%)` }}

@@ -1,16 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LineChart } from "lucide-react";
 import {
   VARIABLE_KEYS,
   VARIABLES,
+  X_AXIS_KEYS,
   ChartSelectionError,
-  resolveChartConfig,
-  getSuggestions
+  getCompatibleYOptions,
+  resolveChartConfig
 } from "../lib/chartEngine";
 import CustomChartPanel from "./CustomChartPanel";
 
-function axisOptions(exclude = []) {
-  return VARIABLE_KEYS.filter((key) => !exclude.includes(key)).map((key) => ({
+function axisOptions(keys = VARIABLE_KEYS) {
+  return keys.map((key) => ({
     value: key,
     label: `${VARIABLES[key].label} (${VARIABLES[key].unit})`
   }));
@@ -23,11 +24,23 @@ export default function CustomChartBuilder({ data, operationMode = "discharge" }
   const [appliedConfig, setAppliedConfig] = useState(null);
   const [error, setError] = useState("");
 
-  const xOptions = axisOptions();
-  const y1Options = axisOptions([x]);
-  const y2Options = axisOptions([x, y1]);
+  const xOptions = axisOptions(X_AXIS_KEYS);
+  const y1Options = axisOptions(getCompatibleYOptions(x));
+  const y2Options = x === "time" ? axisOptions(getCompatibleYOptions(x, [y1])) : [];
 
-  const suggestions = useMemo(() => getSuggestions(x).filter((k) => k !== x && k !== y1), [x, y1]);
+  useEffect(() => {
+    const compatible = getCompatibleYOptions(x);
+    if (!compatible.includes(y1)) {
+      setY1(compatible[0] ?? "");
+      setY2("");
+      return;
+    }
+    if (x !== "time" && y2) {
+      setY2("");
+    } else if (y2 && !getCompatibleYOptions(x, [y1]).includes(y2)) {
+      setY2("");
+    }
+  }, [x, y1, y2]);
 
   const duplicateError = useMemo(() => {
     if (!x || !y1) return "";
@@ -47,19 +60,6 @@ export default function CustomChartBuilder({ data, operationMode = "discharge" }
     } catch (err) {
       setAppliedConfig(null);
       setError(err instanceof ChartSelectionError ? err.message : "Invalid chart selection.");
-    }
-  }
-
-  function applySuggestion(key) {
-    if (x !== "time" && key === "time") {
-      setX("time");
-      return;
-    }
-    if (!y2 || y2 === key) {
-      if (y1 === key) return;
-      setY2(key);
-    } else {
-      setY1(key);
     }
   }
 
@@ -90,7 +90,7 @@ export default function CustomChartBuilder({ data, operationMode = "discharge" }
           </label>
           <label>
             Y-Axis (optional)
-            <select value={y2} onChange={(e) => setY2(e.target.value)}>
+            <select value={y2} onChange={(e) => setY2(e.target.value)} disabled={x !== "time"}>
               <option value="">None</option>
               {y2Options.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -107,16 +107,6 @@ export default function CustomChartBuilder({ data, operationMode = "discharge" }
           </button>
         </div>
 
-        {suggestions.length > 0 ? (
-          <div className="custom-chart-suggestions">
-            <span>Suggested:</span>
-            {suggestions.map((key) => (
-              <button key={key} type="button" className="suggestion-pill" onClick={() => applySuggestion(key)}>
-                {VARIABLES[key].label}
-              </button>
-            ))}
-          </div>
-        ) : null}
         {error ? <p className="custom-chart-error">{error}</p> : null}
         {duplicateError ? <p className="custom-chart-error">{duplicateError}</p> : null}
         {appliedConfig?.warning && !error ? (

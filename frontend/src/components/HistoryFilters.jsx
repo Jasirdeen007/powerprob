@@ -1,28 +1,17 @@
 import { Filter, RotateCcw } from "lucide-react";
 
-const MODE_OPTIONS = ["CHARGE", "DISCHARGE", "IDLE"];
 const PRESETS = [
   { key: "NONE", label: "Any time" },
-  { key: "24h", label: "Last 24h" },
-  { key: "7d", label: "7 days" },
-  { key: "30d", label: "30 days" },
   { key: "custom", label: "Custom" }
 ];
 
 function HistoryFilters({
-  batteryFilter,
-  onBatteryFilterChange,
-  batteries = [],
   preset,
   onPresetChange,
   customStart,
   customEnd,
   onCustomStartChange,
   onCustomEndChange,
-  selectedModes,
-  onToggleMode,
-  onModeSelectAll,
-  onModeSelectNone,
   onReset,
   hasFilters,
   activeFilterBadges = [],
@@ -51,18 +40,6 @@ function HistoryFilters({
       ) : null}
 
       <div className="history-filters-layout">
-        <div className="history-filter-block history-filter-battery">
-          <label className="history-filter-label">Battery</label>
-          <select value={batteryFilter} onChange={(e) => onBatteryFilterChange(e.target.value)}>
-            <option value="ALL">All batteries</option>
-            {batteries.map((battery) => (
-              <option key={battery.batteryId} value={battery.batteryId}>
-                {battery.batteryName ? `${battery.batteryName} (${battery.batteryId})` : battery.batteryId}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div className="history-filter-block history-filter-date">
           <div className="history-filter-block-head">
             <span className="history-filter-label">Date range</span>
@@ -100,32 +77,10 @@ function HistoryFilters({
             </div>
           ) : null}
         </div>
-
-        <div className="history-filter-block history-filter-mode">
-          <div className="history-filter-block-head">
-            <span className="history-filter-label">Operation mode</span>
-            <div className="history-mode-quick">
-              <button type="button" onClick={onModeSelectAll}>All</button>
-              <button type="button" onClick={onModeSelectNone}>Clear</button>
-            </div>
-          </div>
-          <div className="history-mode-pills">
-            {MODE_OPTIONS.map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                className={`history-mode-pill mode-${mode.toLowerCase()} ${selectedModes.includes(mode) ? "active" : ""}`}
-                onClick={() => onToggleMode(mode)}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </section>
   );
 }
 
-export { MODE_OPTIONS, PRESETS };
+export { PRESETS };
 export default HistoryFilters;

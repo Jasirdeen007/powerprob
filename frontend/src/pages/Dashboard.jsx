@@ -81,7 +81,7 @@ function calculateDerivedReadings(sourceReadings, { capacityAh, operationMode, c
   });
 }
 
-function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, profiles = [], onStartSession, onEndSession, onPauseSession, piConnected = false }) {
+function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, profiles = [], onStartSession, onEndSession, onPauseSession, piStatus, piConnected = false }) {
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [chargeConfigModalOpen, setChargeConfigModalOpen] = useState(false);
   const [operationMode, setOperationMode] = useState("discharge");
@@ -326,6 +326,20 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
               <strong>{value}</strong>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className={`pi-status-banner ${piStatus?.connected ? "connected" : "unavailable"}`}>
+        <div className="pi-status-main">
+          <span className="status-dot" />
+          <div>
+            <strong>{piStatus?.connected ? "Raspberry Pi available" : "Raspberry Pi unavailable"}</strong>
+            <span>{piStatus?.connected ? "Live hardware link is ready for telemetry and commands." : "Dashboard is using available demo or cached readings until the Pi reconnects."}</span>
+          </div>
+        </div>
+        <div className="pi-status-meta">
+          <span>{piStatus?.transport ?? "websocket"}</span>
+          <span>{piStatus?.endpoint ?? "/ws/pi"}</span>
         </div>
       </section>
 

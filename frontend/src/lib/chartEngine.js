@@ -10,6 +10,14 @@ export const VARIABLES = {
 
 export const VARIABLE_KEYS = Object.keys(VARIABLES);
 
+export const X_AXIS_KEYS = ["time", "current", "voltage"];
+
+export const COMPATIBLE_Y_BY_X = {
+  time: ["voltage", "current", "temperature", "power", "soc", "soh"],
+  current: ["voltage", "temperature", "power"],
+  voltage: ["current", "temperature", "soc"]
+};
+
 const WEAK_PAIRS = new Set([
   "temperature|soh",
   "soh|temperature",
@@ -118,22 +126,29 @@ export function getInsightWarning(x, y1, y2) {
 }
 
 export function getSuggestions(x) {
-  if (x === "time") {
-    return ["voltage", "current", "temperature", "soc"];
-  }
-  if (x === "current") {
-    return ["voltage", "temperature", "power"];
-  }
-  if (x === "voltage") {
-    return ["current", "temperature", "soc"];
-  }
-  return ["voltage", "current", "temperature"];
+  return COMPATIBLE_Y_BY_X[x] ?? [];
+}
+
+export function getCompatibleYOptions(x, selected = []) {
+  const blocked = new Set(selected.filter(Boolean));
+  return (COMPATIBLE_Y_BY_X[x] ?? []).filter((key) => !blocked.has(key));
+}
+
+export function isCompatibleSelection(x, y1, y2 = null) {
+  if (!X_AXIS_KEYS.includes(x)) return false;
+  const compatible = COMPATIBLE_Y_BY_X[x] ?? [];
+  if (!compatible.includes(y1)) return false;
+  if (y2 && (x !== "time" || !compatible.includes(y2))) return false;
+  return true;
 }
 
 export function resolveChartConfig(x, y1, y2) {
   const y2Clean = y2 && VARIABLES[y2] ? y2 : null;
   const normalized = normalizeSelection(x, y1, y2Clean);
   validateSelection(normalized.x, normalized.y1, normalized.y2);
+  if (!isCompatibleSelection(normalized.x, normalized.y1, normalized.y2)) {
+    throw new ChartSelectionError("Choose a meaningful telemetry comparison.");
+  }
   const choice = chooseChart(normalized.x, normalized.y1, normalized.y2);
   return {
     ...normalized,

@@ -482,6 +482,7 @@ function App() {
             onStartSession={handleStartSession}
             onEndSession={handleEndSession}
             onPauseSession={handlePauseSession}
+            piStatus={piStatus}
             piConnected={piStatus.connected}
           />
         )}

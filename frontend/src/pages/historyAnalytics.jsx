@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
 import { Download, BarChart3, Table2 } from "lucide-react";
 import HistoryChartsPanel from "../components/HistoryChartsPanel";
-import HistoryFilters, { MODE_OPTIONS, PRESETS } from "../components/HistoryFilters";
-
-const RECORD_LIMITS = [10, 20, 100];
+import HistoryFilters, { PRESETS } from "../components/HistoryFilters";
+import { downloadBlob, downloadJson, timestampForFile } from "../lib/exportUtils";
 
 function inferMode(reading, sessionType) {
   if (typeof sessionType === "string") {
@@ -50,13 +49,11 @@ function toInputDateTime(value) {
 }
 
 function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
-  const [batteryFilter, setBatteryFilter] = useState(selectedBattery || "ALL");
   const [preset, setPreset] = useState("NONE");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
-  const [selectedModes, setSelectedModes] = useState(MODE_OPTIONS);
   const [activeView, setActiveView] = useState("charts");
-  const [recordLimit, setRecordLimit] = useState(20);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const records = useMemo(() => {
     const allRows = (data?.testSessions ?? []).flatMap((session) => {
@@ -115,9 +112,6 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
   const dateRange = useMemo(() => {
     const latestRecordTime = records[0]?.timestampMs;
     const now = Number.isFinite(latestRecordTime) ? latestRecordTime : Date.now();
-    if (preset === "24h") return { start: now - 86400000, end: now };
-    if (preset === "7d") return { start: now - 7 * 86400000, end: now };
-    if (preset === "30d") return { start: now - 30 * 86400000, end: now };
     if (preset === "custom") {
       const start = customStart ? new Date(customStart).getTime() : null;
       const end = customEnd ? new Date(customEnd).getTime() : null;
@@ -126,23 +120,17 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
     return null;
   }, [customEnd, customStart, preset, records]);
 
-  const hasModeFilter = selectedModes.length !== MODE_OPTIONS.length;
   const hasDateFilter = preset !== "NONE";
-  const hasBatteryFilter = batteryFilter !== "ALL";
-  const hasFilters = hasModeFilter || hasDateFilter || hasBatteryFilter;
+  const hasFilters = hasDateFilter;
 
   const filteredRecords = useMemo(() => {
     return records.filter((row) => {
-      if (batteryFilter !== "ALL" && row.batteryId !== batteryFilter) return false;
-      if (!selectedModes.includes(row.mode)) return false;
       if (!dateRange) return true;
       if (dateRange.start != null && row.timestampMs < dateRange.start) return false;
       if (dateRange.end != null && row.timestampMs > dateRange.end) return false;
       return true;
     });
-  }, [batteryFilter, dateRange, records, selectedModes]);
-
-  const rowsForTable = useMemo(() => filteredRecords.slice(0, recordLimit), [filteredRecords, recordLimit]);
+  }, [dateRange, records]);
 
   const csvRows = useMemo(() => {
     if (hasFilters) return filteredRecords;
@@ -150,19 +138,10 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
     return records.filter((row) => row.timestampMs >= now - 30 * 86400000);
   }, [filteredRecords, hasFilters, records]);
 
-  function toggleMode(mode) {
-    setSelectedModes((current) => {
-      if (current.includes(mode)) return current.filter((item) => item !== mode);
-      return [...current, mode];
-    });
-  }
-
   function resetFilters() {
-    setBatteryFilter("ALL");
     setPreset("NONE");
     setCustomStart("");
     setCustomEnd("");
-    setSelectedModes(MODE_OPTIONS);
   }
 
   function setDatePreset(nextPreset) {
@@ -175,11 +154,6 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
 
   const activeFilterBadges = useMemo(() => {
     const badges = [];
-    if (batteryFilter !== "ALL") {
-      const battery = batteryOptions.find((item) => item.batteryId === batteryFilter);
-      const label = battery?.batteryName ? `${battery.batteryName} (${battery.batteryId})` : batteryFilter;
-      badges.push({ key: "battery", label: `Battery: ${label}` });
-    }
     if (preset !== "NONE") {
       const presetLabel = PRESETS.find((item) => item.key === preset)?.label ?? preset;
       if (preset === "custom") {
@@ -188,22 +162,18 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
         badges.push({ key: "date", label: presetLabel });
       }
     }
-    if (hasModeFilter) badges.push({ key: "mode", label: selectedModes.join(", ") });
     return badges;
-  }, [batteryFilter, batteryOptions, hasModeFilter, preset, selectedModes]);
+  }, [preset]);
 
   function exportCsv() {
     const csv = buildCsv(csvRows);
-    const date = new Date();
-    const pad = (v) => String(v).padStart(2, "0");
-    const fileName = `battery_data_${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}.csv`;
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(csv, `battery_data_${timestampForFile()}.csv`, "text/csv;charset=utf-8;");
+    setExportOpen(false);
+  }
+
+  function exportJson() {
+    downloadJson(csvRows, `battery_data_${timestampForFile()}.json`);
+    setExportOpen(false);
   }
 
   return (
@@ -230,26 +200,27 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
               <Table2 size={16} /> Data table
             </button>
           </div>
-          <button type="button" className="history-export" onClick={exportCsv}>
-            <Download size={16} /> Export
-          </button>
+          <div className="history-export-menu">
+            <button type="button" className="history-export" onClick={() => setExportOpen((open) => !open)}>
+              <Download size={16} /> Export
+            </button>
+            {exportOpen ? (
+              <div className="history-export-options">
+                <button type="button" onClick={exportCsv}>CSV</button>
+                <button type="button" onClick={exportJson}>JSON</button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </header>
 
       <HistoryFilters
-        batteryFilter={batteryFilter}
-        onBatteryFilterChange={(v) => { setBatteryFilter(v); onBatteryChange?.(v); }}
-        batteries={batteryOptions}
         preset={preset}
         onPresetChange={setDatePreset}
         customStart={customStart}
         customEnd={customEnd}
         onCustomStartChange={(v) => { setPreset("custom"); setCustomStart(v); }}
         onCustomEndChange={(v) => { setPreset("custom"); setCustomEnd(v); }}
-        selectedModes={selectedModes}
-        onToggleMode={toggleMode}
-        onModeSelectAll={() => setSelectedModes(MODE_OPTIONS)}
-        onModeSelectNone={() => setSelectedModes([])}
         onReset={resetFilters}
         hasFilters={hasFilters}
         activeFilterBadges={activeFilterBadges}
@@ -258,27 +229,17 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
         toInputDateTime={toInputDateTime}
       />
 
-      {activeView === "charts" && <HistoryChartsPanel records={filteredRecords} />}
+      {activeView === "charts" && <HistoryChartsPanel records={filteredRecords} batteries={batteryOptions} />}
 
       {activeView === "table" && (
         <section className="panel history-results">
           <div className="history-results-head">
-            <h2>Session records</h2>
-            <div className="history-limit-picker">
-              <span>Show</span>
-              {RECORD_LIMITS.map((limit) => (
-                <button
-                  key={limit}
-                  type="button"
-                  className={recordLimit === limit ? "active" : ""}
-                  onClick={() => setRecordLimit(limit)}
-                >
-                  {limit}
-                </button>
-              ))}
+            <div>
+              <h2>Session records</h2>
+              <p className="history-results-sub">Showing all {filteredRecords.length} filtered records</p>
             </div>
           </div>
-          {rowsForTable.length === 0 ? (
+          {filteredRecords.length === 0 ? (
             <p className="history-empty">No records found for the selected filters.</p>
           ) : (
             <div className="history-table-wrap">
@@ -295,7 +256,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {rowsForTable.map((row) => (
+                  {filteredRecords.map((row) => (
                     <tr key={`${row.sessionId}-${row.time}-${row.timestamp}`}>
                       <td>{row.timestamp}</td>
                       <td>{row.batteryName ? `${row.batteryName} (${row.batteryId})` : row.batteryId}</td>

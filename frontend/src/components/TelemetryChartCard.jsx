@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   LineChart as RLineChart,
   Line,
@@ -17,9 +17,11 @@ import {
   Cell,
   CartesianGrid
 } from "recharts";
+import { Download } from "lucide-react";
 import { getMetricYDomain } from "../lib/chartDomains";
 import { buildAxisLabel } from "../lib/chartEngine";
 import { getChartOptionsForMetric, getDefaultChartType } from "../lib/chartOptions";
+import { downloadCsv, downloadSvgChartPng, timestampForFile } from "../lib/exportUtils";
 
 const capitalize = (s) => (typeof s === "string" && s.length ? s[0].toUpperCase() + s.slice(1) : s);
 
@@ -57,8 +59,21 @@ function getStatusColor(metric, value) {
 }
 
 const TIME_SERIES_TYPES = new Set(["line", "area", "scatter", "step", "multiline"]);
+const MAX_RENDERED_TIME_TICKS = 24;
 
-export default function TelemetryChartCard({
+function buildIntegerTicks(min, max) {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [0];
+  const range = Math.max(1, max - min);
+  const step = Math.max(1, Math.ceil(range / MAX_RENDERED_TIME_TICKS));
+  const ticks = [];
+  for (let value = min; value <= max; value += step) {
+    ticks.push(value);
+  }
+  if (ticks.at(-1) !== max) ticks.push(max);
+  return ticks;
+}
+
+function TelemetryChartCard({
   title,
   metricKey,
   unit,
@@ -69,37 +84,58 @@ export default function TelemetryChartCard({
   compact = false,
   showToggles = true
 }) {
-  const options = getChartOptionsForMetric(metricKey);
-  const defaultType = getDefaultChartType(metricKey);
+  const chartRef = useRef(null);
+  const options = useMemo(() => getChartOptionsForMetric(metricKey), [metricKey]);
+  const defaultType = useMemo(() => getDefaultChartType(metricKey), [metricKey]);
   const [activeChart, setActiveChart] = useState(defaultType);
 
   useEffect(() => {
     setActiveChart(getDefaultChartType(metricKey));
   }, [metricKey]);
 
-  const getYAxisDomain = () => {
-    if (forceYRange) return [forceYRange.min, forceYRange.max];
-    const values = data.map((d) => d[metricKey]).filter(Number.isFinite);
-    return getMetricYDomain(metricKey, values, operationMode);
-  };
-
-  const processedData = data.map((d) => ({
+  const processedData = useMemo(() => data.map((d) => ({
     ...d,
     time: typeof d.time === "number" ? d.time : Number(d.time) || 0
-  }));
+  })), [data]);
+  const timeValues = useMemo(() => processedData.map((d) => d.time).filter(Number.isFinite), [processedData]);
+  const minTime = timeValues.length ? Math.floor(Math.min(...timeValues)) : 0;
+  const maxTime = timeValues.length ? Math.ceil(Math.max(...timeValues)) : 0;
+  const timeTicks = useMemo(() => buildIntegerTicks(minTime, maxTime), [maxTime, minTime]);
+  const timeSeriesWidth = Math.max(560, Math.min(4200, Math.max(processedData.length, maxTime - minTime + 1) * 12));
   const latestValue = processedData.length > 0 ? processedData.at(-1)?.[metricKey] ?? 0 : 0;
   const statusColor = getStatusColor(metricKey, latestValue);
   const isPercent = metricKey === "soc" || metricKey === "soh";
   const latestDisplay = `${latestValue.toFixed(isPercent ? 0 : 2)}${isPercent ? "%" : ` ${unit}`}`;
 
-  const yDomain = getYAxisDomain();
+  const yDomain = useMemo(() => {
+    if (forceYRange) return [forceYRange.min, forceYRange.max];
+    const values = processedData.map((d) => d[metricKey]).filter(Number.isFinite);
+    return getMetricYDomain(metricKey, values, operationMode);
+  }, [forceYRange, metricKey, operationMode, processedData]);
   const formatTick = (v) => {
     const n = Number(v);
     if (!Number.isFinite(n)) return v;
+    if (metricKey === "time") return `${Math.round(n)}`;
     if (metricKey === "soc" || metricKey === "soh") return `${Math.round(n)}`;
     if (Math.abs(n) >= 100) return Math.round(n).toString();
     return n.toFixed(1);
   };
+  const formatTimeTick = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? String(Math.round(n)) : v;
+  };
+
+  function handleDownloadPng() {
+    downloadSvgChartPng(chartRef.current, `${metricKey}_chart_${timestampForFile()}.png`);
+  }
+
+  function handleDownloadCsv() {
+    const rows = processedData.map((row) => ({
+      time_s: Math.round(row.time),
+      [metricKey]: row[metricKey]
+    }));
+    downloadCsv(rows, ["time_s", metricKey], `${metricKey}_readings_${timestampForFile()}.csv`);
+  }
 
   const getAxisLabel = (type) => {
     if (customAxisLabels?.[type]) return customAxisLabels[type];
@@ -179,15 +215,19 @@ export default function TelemetryChartCard({
 
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <ChartComponent data={processedData} margin={{ top: 8, right: 12, left: 2, bottom: 22 }}>
+        <ChartComponent data={processedData} margin={{ top: 8, right: 16, left: 12, bottom: 28 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="time"
-            tickFormatter={formatTick}
+            type="number"
+            domain={[minTime, maxTime]}
+            ticks={timeTicks}
+            interval={0}
+            tickFormatter={formatTimeTick}
             tick={{ fill: "var(--text-main)", fontSize: 10 }}
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
-            label={{ value: getAxisLabel("xlabel"), position: "insideBottom", offset: -2, fill: "var(--text-muted)", fontSize: 10 }}
+            label={{ value: getAxisLabel("xlabel"), position: "insideBottom", offset: -8, fill: "var(--text-muted)", fontSize: 10 }}
           />
           <YAxis
             domain={yDomain}
@@ -195,7 +235,15 @@ export default function TelemetryChartCard({
             tick={{ fill: "var(--text-main)", fontSize: 10 }}
             tickLine={{ stroke: "var(--border-strong)" }}
             axisLine={{ stroke: "var(--border-strong)" }}
-            width={48}
+            width={58}
+            label={{
+              value: getAxisLabel("ylabel"),
+              angle: -90,
+              position: "insideLeft",
+              offset: -2,
+              fill: "var(--text-muted)",
+              fontSize: 10
+            }}
           />
           <Tooltip
             cursor={false}
@@ -230,24 +278,40 @@ export default function TelemetryChartCard({
             </span>
           </div>
         </div>
-        {showToggles && options.length > 1 ? (
-          <div className="visual-toggle" aria-label="Chart type">
-            {options.map(({ key, Icon, label }) => (
-              <button
-                key={key}
-                type="button"
-                className={activeChart === key ? "active" : ""}
-                onClick={() => setActiveChart(key)}
-                title={label}
-                style={{ color: activeChart === key ? statusColor : "var(--text-light)" }}
-              >
-                <Icon size={15} />
-              </button>
-            ))}
+        <div className="chart-card-actions">
+          {showToggles && options.length > 1 ? (
+            <div className="visual-toggle" aria-label="Chart type">
+              {options.map(({ key, Icon, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={activeChart === key ? "active" : ""}
+                  onClick={() => setActiveChart(key)}
+                  title={label}
+                  style={{ color: activeChart === key ? statusColor : "var(--text-light)" }}
+                >
+                  <Icon size={15} />
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <div className="chart-download-actions" aria-label={`${title} downloads`}>
+            <button type="button" onClick={handleDownloadPng} title="Download chart PNG">
+              <Download size={14} /> PNG
+            </button>
+            <button type="button" onClick={handleDownloadCsv} title="Download chart CSV">
+              CSV
+            </button>
           </div>
-        ) : null}
+        </div>
       </div>
-      <div className="chart-container">{renderChart()}</div>
+      <div className="chart-scroll">
+        <div className="chart-container" ref={chartRef} style={{ minWidth: TIME_SERIES_TYPES.has(activeChart) ? `${timeSeriesWidth}px` : undefined }}>
+          {renderChart()}
+        </div>
+      </div>
     </div>
   );
 }
+
+export default memo(TelemetryChartCard);

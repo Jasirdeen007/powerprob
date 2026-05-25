@@ -3,6 +3,8 @@ import {
   Line,
   AreaChart,
   Area,
+  ScatterChart,
+  Scatter,
   XAxis,
   YAxis,
   Tooltip,
@@ -10,10 +12,26 @@ import {
   CartesianGrid,
   Legend
 } from "recharts";
+import { memo, useMemo, useRef } from "react";
+import { Download } from "lucide-react";
 import { getCustomYDomain } from "../lib/chartDomains";
 import { buildAxisLabel } from "../lib/chartEngine";
+import { downloadCsv, downloadSvgChartPng, timestampForFile } from "../lib/exportUtils";
 
 const SERIES_COLORS = { y1: "#246bfe", y2: "#15915b" };
+const MAX_RENDERED_TIME_TICKS = 24;
+
+function buildIntegerTicks(min, max) {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [0];
+  const range = Math.max(1, max - min);
+  const step = Math.max(1, Math.ceil(range / MAX_RENDERED_TIME_TICKS));
+  const ticks = [];
+  for (let value = min; value <= max; value += step) {
+    ticks.push(value);
+  }
+  if (ticks.at(-1) !== max) ticks.push(max);
+  return ticks;
+}
 
 function formatTick(value) {
   const n = Number(value);
@@ -23,7 +41,7 @@ function formatTick(value) {
   return n.toFixed(2);
 }
 
-export default function CustomChartPanel({ config, data, operationMode = "discharge" }) {
+function CustomChartPanel({ config, data, operationMode = "discharge" }) {
   if (!config || data.length === 0) {
     return (
       <div className="custom-chart-empty panel">
@@ -32,12 +50,18 @@ export default function CustomChartPanel({ config, data, operationMode = "discha
     );
   }
 
-  const processed = data.map((row) => ({
+  return <RenderedCustomChart config={config} data={data} operationMode={operationMode} />;
+}
+
+function RenderedCustomChart({ config, data, operationMode }) {
+  const chartRef = useRef(null);
+
+  const processed = useMemo(() => data.map((row) => ({
     ...row,
     [config.x]: typeof row[config.x] === "number" ? row[config.x] : Number(row[config.x]) || 0,
     [config.y1]: Number(row[config.y1]) || 0,
     ...(config.y2 ? { [config.y2]: Number(row[config.y2]) || 0 } : {})
-  }));
+  })), [config, data]);
 
   const y1Values = processed.map((r) => r[config.y1]);
   const y2Values = config.y2 ? processed.map((r) => r[config.y2]) : [];
@@ -53,6 +77,11 @@ export default function CustomChartPanel({ config, data, operationMode = "discha
   const y2Label = config.y2 ? buildAxisLabel(config.y2, y2Domain) : null;
 
   const useDual = config.y2 && config.chart === "multi_line" && config.dual_axis;
+  const xIsTime = config.x === "time";
+  const minTime = xIsTime && xValues.length ? Math.floor(Math.min(...xValues)) : 0;
+  const maxTime = xIsTime && xValues.length ? Math.ceil(Math.max(...xValues)) : 0;
+  const timeTicks = useMemo(() => xIsTime ? buildIntegerTicks(minTime, maxTime) : undefined, [maxTime, minTime, xIsTime]);
+  const chartWidth = xIsTime ? Math.max(680, Math.min(4200, Math.max(processed.length, maxTime - minTime + 1) * 12)) : 760;
   const chartMargin = {
     top: 16,
     right: useDual ? 52 : 20,
@@ -61,6 +90,10 @@ export default function CustomChartPanel({ config, data, operationMode = "discha
   };
 
   function renderSeries() {
+    if (config.chart === "scatter") {
+      return <Scatter dataKey={config.y1} name={VARIABLES_LABEL(config.y1)} fill={SERIES_COLORS.y1} yAxisId="left" isAnimationActive={false} />;
+    }
+
     if (config.chart === "area") {
       return (
         <>
@@ -70,7 +103,7 @@ export default function CustomChartPanel({ config, data, operationMode = "discha
               <stop offset="95%" stopColor={SERIES_COLORS.y1} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <Area type="monotone" dataKey={config.y1} stroke={SERIES_COLORS.y1} fill="url(#custom-area-gradient)" isAnimationActive={false} />
+          <Area type="monotone" dataKey={config.y1} stroke={SERIES_COLORS.y1} fill="url(#custom-area-gradient)" yAxisId="left" isAnimationActive={false} />
         </>
       );
     }
@@ -109,33 +142,63 @@ export default function CustomChartPanel({ config, data, operationMode = "discha
         stroke={SERIES_COLORS.y1}
         dot={false}
         strokeWidth={2}
+        yAxisId="left"
         isAnimationActive={false}
       />
     );
   }
 
-  const ChartType = config.chart === "area" ? AreaChart : LineChart;
+  const ChartType = config.chart === "scatter" ? ScatterChart : config.chart === "area" ? AreaChart : LineChart;
+  const xAxisProps = xIsTime
+    ? { type: "number", domain: [minTime, maxTime], ticks: timeTicks, interval: 0 }
+    : { type: "number", domain: xDomain };
+
+  function handleDownloadPng() {
+    downloadSvgChartPng(chartRef.current, `custom_chart_${timestampForFile()}.png`);
+  }
+
+  function handleDownloadCsv() {
+    const columns = [config.x, config.y1, ...(config.y2 ? [config.y2] : [])];
+    const rows = processed.map((row) => Object.fromEntries(columns.map((key) => [
+      key === "time" ? "time_s" : key,
+      key === "time" ? Math.round(row[key]) : row[key]
+    ])));
+    const exportColumns = columns.map((key) => (key === "time" ? "time_s" : key));
+    downloadCsv(rows, exportColumns, `custom_chart_${timestampForFile()}.csv`);
+  }
 
   return (
     <div className="custom-chart-panel panel">
       <div className="custom-chart-panel-head">
-        <h3>{config.title}</h3>
-        <div className="custom-chart-legend-row">
-          <span className="custom-legend-item" style={{ color: SERIES_COLORS.y1 }}>{y1Label}</span>
-          {config.y2 ? (
-            <span className="custom-legend-item" style={{ color: SERIES_COLORS.y2 }}>{y2Label}</span>
-          ) : null}
+        <div>
+          <h3>{config.title}</h3>
+          <div className="custom-chart-legend-row">
+            <span className="custom-legend-item">X: {xLabel}</span>
+            <span className="custom-legend-item" style={{ color: SERIES_COLORS.y1 }}>Y: {y1Label}</span>
+            {config.y2 ? (
+              <span className="custom-legend-item" style={{ color: SERIES_COLORS.y2 }}>Y2: {y2Label}</span>
+            ) : null}
+          </div>
+        </div>
+        <div className="chart-download-actions">
+          <button type="button" onClick={handleDownloadPng} title="Download chart PNG">
+            <Download size={14} /> PNG
+          </button>
+          <button type="button" onClick={handleDownloadCsv} title="Download chart CSV">
+            CSV
+          </button>
         </div>
       </div>
       {config.warning ? <p className="custom-chart-warning">{config.warning}</p> : null}
-      <div className="custom-chart-canvas">
+      <div className="custom-chart-scroll">
+        <div className="custom-chart-canvas" ref={chartRef} style={{ minWidth: `${chartWidth}px` }}>
         <ResponsiveContainer width="100%" height="100%">
           <ChartType data={processed} margin={chartMargin}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis
               dataKey={config.x}
-              domain={xDomain}
-              tickFormatter={formatTick}
+              {...xAxisProps}
+              tickFormatter={xIsTime ? (value) => String(Math.round(Number(value))) : formatTick}
               tick={{ fill: "var(--text-main)", fontSize: 10 }}
               tickLine={false}
               axisLine={{ stroke: "var(--border)" }}
@@ -181,10 +244,13 @@ export default function CustomChartPanel({ config, data, operationMode = "discha
             {renderSeries()}
           </ChartType>
         </ResponsiveContainer>
+        </div>
       </div>
     </div>
   );
 }
+
+export default memo(CustomChartPanel);
 
 function VARIABLES_LABEL(key) {
   const labels = {
