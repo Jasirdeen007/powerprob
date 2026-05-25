@@ -1,0 +1,16 @@
+# PowerProbe backend dependencies
+
+# API server
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.8.0
+
+# Environment and Firebase integration
+python-dotenv>=1.0.1
+firebase-admin>=6.5.0
+
+# Raspberry Pi websocket client/scripts
+websockets>=13.0
+
+# Tests
+pytest>=8.3.0
