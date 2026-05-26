@@ -4271,8 +4271,8 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   border-color: transparent;
 }
 
-.history-mode-pill.mode-charge.active { background: #3b82f6; }
-.history-mode-pill.mode-discharge.active { background: #ec4899; }
+.history-mode-pill.mode-charge.active { background: #10b981; }
+.history-mode-pill.mode-discharge.active { background: #ef4444; }
 .history-mode-pill.mode-idle.active { background: #64748b; }
 
 .history-view-tabs {
@@ -4825,8 +4825,8 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 }
 
 .operation-mode-badge.mode-discharge {
-  background: rgba(36, 107, 254, 0.12);
-  color: #246bfe;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
 }
 
 /* Dark theme: make operation mode badges more prominent */
@@ -4836,9 +4836,9 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   box-shadow: 0 4px 12px rgba(16,185,129,0.06);
 }
 :root[data-theme='dark'] .operation-mode-badge.mode-discharge {
-  background: rgba(36,107,254,0.18) !important;
-  color: #cfe4ff !important;
-  box-shadow: 0 4px 12px rgba(59,130,246,0.06);
+  background: rgba(239, 68, 68, 0.18) !important;
+  color: #fca5a5 !important;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.06);
 }
 
 .custom-chart-section {

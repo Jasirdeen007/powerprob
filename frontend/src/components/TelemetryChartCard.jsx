@@ -215,7 +215,7 @@ function TelemetryChartCard({
 
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <ChartComponent data={processedData} margin={{ top: 8, right: 16, left: 12, bottom: 28 }}>
+        <ChartComponent data={processedData} margin={{ top: 8, right: 16, left: 0, bottom: 28 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="time"
@@ -231,19 +231,10 @@ function TelemetryChartCard({
           />
           <YAxis
             domain={yDomain}
-            tickFormatter={formatTick}
-            tick={{ fill: "var(--text-main)", fontSize: 10 }}
-            tickLine={{ stroke: "var(--border-strong)" }}
-            axisLine={{ stroke: "var(--border-strong)" }}
-            width={58}
-            label={{
-              value: getAxisLabel("ylabel"),
-              angle: -90,
-              position: "insideLeft",
-              offset: -2,
-              fill: "var(--text-muted)",
-              fontSize: 10
-            }}
+            width={0}
+            tick={false}
+            axisLine={false}
+            tickLine={false}
           />
           <Tooltip
             cursor={false}
@@ -265,6 +256,8 @@ function TelemetryChartCard({
     if (TIME_SERIES_TYPES.has(activeChart)) return renderTimeSeries();
     return renderTimeSeries();
   }
+
+  const isTimeSeries = TIME_SERIES_TYPES.has(activeChart) && processedData.length > 0;
 
   return (
     <div className={`telemetry-chart-card panel ${compact ? "compact" : ""}`}>
@@ -305,9 +298,40 @@ function TelemetryChartCard({
           </div>
         </div>
       </div>
-      <div className="chart-scroll">
-        <div className="chart-container" ref={chartRef} style={{ minWidth: TIME_SERIES_TYPES.has(activeChart) ? `${timeSeriesWidth}px` : undefined }}>
-          {renderChart()}
+      <div style={{ display: "flex", flex: 1, minHeight: 0, position: "relative", width: "100%", overflow: "hidden" }}>
+        {/* Static Left Y-Axis Container */}
+        {isTimeSeries && (
+          <div style={{ width: "58px", flexShrink: 0, height: "100%", pointerEvents: "none" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <RLineChart data={processedData} margin={{ top: 8, right: 0, left: 12, bottom: 28 }}>
+                <XAxis hide dataKey="time" type="number" domain={[minTime, maxTime]} />
+                <YAxis
+                  domain={yDomain}
+                  tickFormatter={formatTick}
+                  tick={{ fill: "var(--text-main)", fontSize: 10 }}
+                  tickLine={{ stroke: "var(--border-strong)" }}
+                  axisLine={{ stroke: "var(--border-strong)" }}
+                  width={46}
+                  label={{
+                    value: getAxisLabel("ylabel"),
+                    angle: -90,
+                    position: "insideLeft",
+                    offset: -2,
+                    fill: "var(--text-muted)",
+                    fontSize: 10
+                  }}
+                />
+                <Line type="monotone" dataKey={metricKey} stroke="transparent" dot={false} isAnimationActive={false} />
+              </RLineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Scrollable Main Chart Area */}
+        <div className="chart-scroll" style={{ flex: 1, minWidth: 0, height: "100%" }}>
+          <div className="chart-container" ref={chartRef} style={{ minWidth: isTimeSeries ? `${timeSeriesWidth}px` : undefined, height: "100%" }}>
+            {renderChart()}
+          </div>
         </div>
       </div>
     </div>

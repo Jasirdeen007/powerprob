@@ -167,6 +167,13 @@ function RenderedCustomChart({ config, data, operationMode }) {
     downloadCsv(rows, exportColumns, `custom_chart_${timestampForFile()}.csv`);
   }
 
+  const mainChartMargin = {
+    top: 16,
+    right: 20,
+    left: 0,
+    bottom: config.y2 ? 36 : 28
+  };
+
   return (
     <div className="custom-chart-panel panel">
       <div className="custom-chart-panel-head">
@@ -190,61 +197,104 @@ function RenderedCustomChart({ config, data, operationMode }) {
         </div>
       </div>
       {config.warning ? <p className="custom-chart-warning">{config.warning}</p> : null}
-      <div className="custom-chart-scroll">
-        <div className="custom-chart-canvas" ref={chartRef} style={{ minWidth: `${chartWidth}px` }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <ChartType data={processed} margin={chartMargin}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis
-              dataKey={config.x}
-              {...xAxisProps}
-              tickFormatter={xIsTime ? (value) => String(Math.round(Number(value))) : formatTick}
-              tick={{ fill: "var(--text-main)", fontSize: 10 }}
-              tickLine={false}
-              axisLine={{ stroke: "var(--border)" }}
-              label={{ value: xLabel, position: "insideBottom", offset: -4, fill: "var(--text-muted)", fontSize: 10 }}
-            />
-            <YAxis
-              yAxisId="left"
-              domain={y1Domain}
-              tickFormatter={formatTick}
-              tick={{ fill: "var(--text-main)", fontSize: 10 }}
-              tickLine={{ stroke: "var(--border-strong)" }}
-              axisLine={{ stroke: "var(--border-strong)" }}
-              width={56}
-            />
-            {useDual ? (
+      
+      <div style={{ display: "flex", width: "100%", height: "320px", marginTop: "10px", position: "relative", overflow: "hidden" }}>
+        {/* Left Static Y-Axis Container */}
+        <div style={{ width: "56px", flexShrink: 0, height: "100%", pointerEvents: "none" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={processed} margin={{ top: 16, right: 0, left: 12, bottom: config.y2 ? 36 : 28 }}>
+              <XAxis hide dataKey={config.x} {...xAxisProps} />
               <YAxis
-                yAxisId="right"
-                orientation="right"
-                domain={y2Domain}
+                yAxisId="left"
+                domain={y1Domain}
                 tickFormatter={formatTick}
                 tick={{ fill: "var(--text-main)", fontSize: 10 }}
                 tickLine={{ stroke: "var(--border-strong)" }}
                 axisLine={{ stroke: "var(--border-strong)" }}
-                width={56}
+                width={44}
               />
-            ) : null}
-            <Tooltip
-              formatter={(value, name) => [Number(value).toFixed(2), name]}
-              contentStyle={{
-                backgroundColor: "var(--bg-surface)",
-                border: "1px solid var(--border-main)",
-                borderRadius: "6px",
-                color: "var(--text-main)"
-              }}
-            />
-            {config.y2 ? (
-              <Legend
-                verticalAlign="bottom"
-                height={24}
-                wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-              />
-            ) : null}
-            {renderSeries()}
-          </ChartType>
-        </ResponsiveContainer>
+              <Line yAxisId="left" type="monotone" dataKey={config.y1} stroke="transparent" dot={false} isAnimationActive={false} />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
+
+        {/* Scrollable Main Chart Area */}
+        <div className="custom-chart-scroll" style={{ flex: 1, minWidth: 0, height: "100%" }}>
+          <div className="custom-chart-canvas" ref={chartRef} style={{ minWidth: `${chartWidth}px`, height: "100%", marginTop: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ChartType data={processed} margin={mainChartMargin}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis
+                  dataKey={config.x}
+                  {...xAxisProps}
+                  tickFormatter={xIsTime ? (value) => String(Math.round(Number(value))) : formatTick}
+                  tick={{ fill: "var(--text-main)", fontSize: 10 }}
+                  tickLine={false}
+                  axisLine={{ stroke: "var(--border)" }}
+                  label={{ value: xLabel, position: "insideBottom", offset: -4, fill: "var(--text-muted)", fontSize: 10 }}
+                />
+                <YAxis
+                  yAxisId="left"
+                  domain={y1Domain}
+                  width={0}
+                  tick={false}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                {useDual ? (
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    domain={y2Domain}
+                    width={0}
+                    tick={false}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                ) : null}
+                <Tooltip
+                  formatter={(value, name) => [Number(value).toFixed(2), name]}
+                  contentStyle={{
+                    backgroundColor: "var(--bg-surface)",
+                    border: "1px solid var(--border-main)",
+                    borderRadius: "6px",
+                    color: "var(--text-main)"
+                  }}
+                />
+                {config.y2 ? (
+                  <Legend
+                    verticalAlign="bottom"
+                    height={24}
+                    wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                  />
+                ) : null}
+                {renderSeries()}
+              </ChartType>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Right Static Y-Axis Container */}
+        {useDual && (
+          <div style={{ width: "56px", flexShrink: 0, height: "100%", pointerEvents: "none" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={processed} margin={{ top: 16, right: 12, left: 0, bottom: config.y2 ? 36 : 28 }}>
+                <XAxis hide dataKey={config.x} {...xAxisProps} />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  domain={y2Domain}
+                  tickFormatter={formatTick}
+                  tick={{ fill: "var(--text-main)", fontSize: 10 }}
+                  tickLine={{ stroke: "var(--border-strong)" }}
+                  axisLine={{ stroke: "var(--border-strong)" }}
+                  width={44}
+                />
+                <Line yAxisId="right" type="monotone" dataKey={config.y2} stroke="transparent" dot={false} isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     </div>
   );
