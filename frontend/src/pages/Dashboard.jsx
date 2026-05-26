@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Activity, Flame, Gauge, Play, Pause, Square, Zap, BatteryFull, Settings } from "lucide-react";
+import { Activity, Flame, Gauge, Play, Pause, Square, Zap, BatteryFull, Settings, Wifi, WifiOff } from "lucide-react";
 import MetricCard from "../components/MetricCard";
 import TelemetryChartCard from "../components/TelemetryChartCard";
 import ConfigurationModal from "../components/ConfigurationModal";
@@ -9,9 +9,24 @@ import CustomChartBuilder from "../components/CustomChartBuilder";
 import { statusLabel } from "../data/appConfig";
 import { clamp } from "../lib/battery";
 
-import demoData from "../demo-data.json";
+const ZERO_READING = {
+  time: 0,
+  voltage: 0,
+  current: 0,
+  temperature: 0,
+  soc: 0,
+  soh: 0,
+  power: 0,
+  status: "healthy"
+};
 
-function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, profiles = [], onStartSession, onEndSession, onPauseSession }) {
+function isRealPiReading(reading) {
+  if (!reading) return false;
+  if (reading.timestamp) return true;
+  return [reading.voltage, reading.current, reading.temperature].some((value) => Number(value) !== 0);
+}
+
+function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, profiles = [], onStartSession, onEndSession, onPauseSession, piStatus }) {
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [chargeConfigModalOpen, setChargeConfigModalOpen] = useState(false);
   const [operationMode, setOperationMode] = useState("discharge");
@@ -34,17 +49,11 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
   const [sessionError, setSessionError] = useState("");
   const [batteryName, setBatteryName] = useState("");
   const [chargeModalOpen, setChargeModalOpen] = useState(false);
-  const [useDemo, setUseDemo] = useState(true);
 
-  const demoReadings = (demoData?.testSessions?.[0]?.readings ?? []).map((r) => ({
-    time: r.time ?? 0,
-    voltage: Number(r.voltage) || 0,
-    current: Number(r.current) || 0,
-    temperature: Number(r.temperature) || 0
-  }));
-
-  const fullReadings = selectedSession?.readings ?? ((!useDemo && (liveStream?.length > 0)) ? liveStream : demoReadings);
-  const usingDemo = fullReadings === demoReadings;
+  const piConnected = Boolean(piStatus?.connected);
+  const liveReadings = Array.isArray(liveStream) ? liveStream : [];
+  const hasPiTelemetry = piConnected && liveReadings.some(isRealPiReading);
+  const fullReadings = hasPiTelemetry ? liveReadings : [ZERO_READING];
 
   const profileSpecs = {
     "Surveillance Drone": { cRating: "10", batteryType: "Li-ion", mah: "4500", numCells: "4", voltage: "14.8" },
@@ -53,7 +62,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
     "Inspection Quad": { cRating: "15", batteryType: "Li-ion", mah: "8000", numCells: "4", voltage: "14.8" }
   };
 
-  const point = fullReadings.at(-1) ?? fullReadings[0] ?? livePoint;
+  const point = fullReadings.at(-1) ?? ZERO_READING;
   const dashboardConfig = operationMode === "charge"
     ? {
       title: "Charge Configuration",
@@ -78,19 +87,25 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
       ]
     };
 
-  const activeLivePoint = {
-    ...livePoint,
-    ...point,
-    soc: Math.round(clamp(((point.voltage - 3) / 1.25) * 100, 0, 100)),
-  };
+  const activeLivePoint = hasPiTelemetry
+    ? {
+      ...livePoint,
+      ...point,
+      soc: Number.isFinite(point.soc) ? point.soc : Math.round(clamp(((point.voltage - 3) / 1.25) * 100, 0, 100)),
+      status: point.status ?? livePoint?.status ?? "healthy"
+    }
+    : {
+      ...ZERO_READING,
+      mode: livePoint?.mode ?? "IDLE"
+    };
 
   const readings = fullReadings.map((reading, index, list) => {
     const computedSoc = Math.round(clamp(100 - (index / Math.max(1, list.length)) * 75, 0, 100));
     const computedSoh = Number((99.5 - (index / Math.max(1, list.length)) * 4.2).toFixed(2));
     return {
       ...reading,
-      soc: computedSoc,
-      soh: computedSoh,
+      soc: hasPiTelemetry ? (Number.isFinite(reading.soc) ? reading.soc : computedSoc) : 0,
+      soh: hasPiTelemetry ? (Number.isFinite(reading.soh) ? reading.soh : computedSoh) : 0,
       power: Number((reading.voltage * reading.current).toFixed(2)),
       thermalLimit: 38,
       criticalLimit: 45
@@ -99,6 +114,13 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
 
   const powerValue = activeLivePoint.voltage * activeLivePoint.current;
   const tone = activeLivePoint.status === "critical" ? "danger" : activeLivePoint.status === "warning" ? "warn" : "good";
+  const PiStatusIcon = piConnected ? Wifi : WifiOff;
+  const piStatusLabel = hasPiTelemetry ? "Pi data receiving" : piConnected ? "Pi available" : "Pi unavailable";
+  const piStatusDetail = hasPiTelemetry
+    ? "Live telemetry is updating the dashboard"
+    : piConnected
+      ? "Pi is connected, waiting for telemetry packets"
+      : "Waiting for Raspberry Pi telemetry bridge";
 
   const profileDescriptions = {
     "Surveillance Drone": "Surveillance Drone: Hover, camera sweep, return, and controlled landing",
@@ -141,7 +163,6 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
 
       setActiveSessionId(response?.session_id ?? "");
       setIsRunning(true);
-      setUseDemo(false);
       setIsPaused(false);
     } catch (error) {
       setSessionError(error instanceof Error ? error.message : "Could not start session.");
@@ -263,6 +284,16 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
         </div>
       </section>
 
+      <section className={`pi-status-banner ${piConnected ? "connected" : "unavailable"}`} aria-label="Raspberry Pi connection status">
+        <div className="pi-status-main">
+          <PiStatusIcon size={22} aria-hidden="true" />
+          <div>
+            <strong>{piStatusLabel}</strong>
+            <span>{piStatusDetail}</span>
+          </div>
+        </div>
+      </section>
+
       <div className="instrument-panel-header">
         <div>
           <h2>Instrument Panel</h2>
@@ -289,7 +320,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
         <div className="global-charts-head">
           <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
             <h2>Global Telemetry</h2>
-            {usingDemo && <span className="demo-badge">Demo data</span>}
+            {!hasPiTelemetry && <span className="demo-badge">Waiting for Pi data</span>}
           </div>
           <p>Six live charts — axes adapt to {operationMode} operating range</p>
         </div>

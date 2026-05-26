@@ -23,6 +23,16 @@ function toIsoTimestamp(startTime, offsetSeconds) {
   return new Date(startedAt + offsetMs).toISOString();
 }
 
+function isRealPiSession(session) {
+  return ["pi-live", "firebase-live"].includes(session?.sourceFile);
+}
+
+function isRealPiReading(reading) {
+  if (!reading) return false;
+  if (reading.timestamp) return true;
+  return [reading.voltage, reading.current, reading.temperature].some((value) => Number(value) !== 0);
+}
+
 function buildCsv(records) {
   const columns = [
     "timestamp", "batteryId", "batteryName", "sessionId", "testId", "type", "uid",
@@ -56,9 +66,10 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
   const [exportOpen, setExportOpen] = useState(false);
 
   const records = useMemo(() => {
-    const allRows = (data?.testSessions ?? []).flatMap((session) => {
-      return (session.readings ?? []).map((reading) => {
-        const timestamp = toIsoTimestamp(session.startTime, reading.time);
+    const realSessions = (data?.testSessions ?? []).filter(isRealPiSession);
+    const allRows = realSessions.flatMap((session) => {
+      return (session.readings ?? []).filter(isRealPiReading).map((reading) => {
+        const timestamp = reading.timestamp || toIsoTimestamp(session.startTime, reading.time);
         return {
           timestamp,
           timestampMs: timestamp ? new Date(timestamp).getTime() : null,
@@ -88,18 +99,12 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
 
   const batteryOptions = useMemo(() => {
     const byId = new Map();
-    for (const battery of data?.batteries ?? []) {
-      byId.set(battery.batteryId, {
-        batteryId: battery.batteryId,
-        batteryName: battery.batteryName || battery.name || ""
-      });
-    }
-    for (const session of data?.testSessions ?? []) {
-      if (!session.batteryId) continue;
-      const current = byId.get(session.batteryId);
-      byId.set(session.batteryId, {
-        batteryId: session.batteryId,
-        batteryName: session.batteryName || current?.batteryName || ""
+    for (const row of records) {
+      if (!row.batteryId) continue;
+      const current = byId.get(row.batteryId);
+      byId.set(row.batteryId, {
+        batteryId: row.batteryId,
+        batteryName: row.batteryName || current?.batteryName || ""
       });
     }
     return Array.from(byId.values()).sort((a, b) => {
@@ -107,7 +112,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
       const labelB = b.batteryName || b.batteryId;
       return labelA.localeCompare(labelB);
     });
-  }, [data]);
+  }, [records]);
 
   const dateRange = useMemo(() => {
     const latestRecordTime = records[0]?.timestampMs;

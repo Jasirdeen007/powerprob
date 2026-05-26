@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BatteryCharging, LogOut, Menu, Moon, Sun, X, User } from "lucide-react";
+import { BatteryCharging, LogOut, Menu, Moon, Sun, User, X } from "lucide-react";
 
 function BrandLogo({ size = 22 }) {
   return (
@@ -18,7 +18,6 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
     { key: "dashboard", label: "Dashboard" },
     { key: "traceability", label: "History Analytics" }
   ];
-
   useEffect(() => {
     if (!profileMenuOpen) return undefined;
     function onPointerDown(e) {
@@ -42,7 +41,6 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
           <BrandLogo />
           <div className="brand-text">
             <strong className="brand-name">PowerProbe</strong>
-            <span className="brand-tagline">BMS Dashboard</span>
           </div>
         </div>
 

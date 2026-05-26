@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Header from "./components/Header";
-import { endSession, getHistorical, getPiStatus, getProfiles, getSessions, sendPiCommand, startSession } from "./backendClient";
+import { endSession, getPiStatus, getProfiles, getSessions, sendPiCommand, startSession } from "./backendClient";
 import { appUser } from "./data/appConfig";
 import {
   authEnabled,
@@ -17,22 +17,6 @@ import Dashboard from "./pages/Dashboard";
 import Landing from "./pages/Landing";
 import HistoryAnalytics from "./pages/historyAnalytics";
 import { clamp } from "./lib/battery";
-
-function backendPacketToReading(packet, startedAt) {
-  const timestampMs = new Date(packet.timestamp).getTime();
-  const startedMs = new Date(startedAt ?? packet.timestamp).getTime();
-  return {
-    time: Number.isFinite(timestampMs) && Number.isFinite(startedMs) ? Math.max(0, (timestampMs - startedMs) / 1000) : 0,
-    voltage: Number(packet.pack_voltage ?? 0),
-    current: Number(packet.current ?? 0),
-    temperature: Number(packet.temperature?.battery ?? 0),
-    action: packet.event ?? "",
-    soc: Number(packet.derived?.soc ?? NaN),
-    soh: Number(packet.derived?.soh ?? NaN),
-    rul: Number(packet.derived?.rul ?? NaN),
-    timestamp: packet.timestamp
-  };
-}
 
 function makeStaticInitialData() {
   const initialBatteryId = localDemoData.batteries[0]?.batteryId ?? "B0047";
@@ -89,6 +73,53 @@ function mergeLiveReadings(currentLiveReadings, incomingLiveReadings) {
   return merged;
 }
 
+function isRealTelemetryPoint(reading) {
+  if (!reading) return false;
+  if (reading.timestamp) return true;
+  return [reading.voltage, reading.current, reading.temperature].some((value) => Number(value) !== 0);
+}
+
+function appendLiveReadingsToSessions(currentSessions = [], incomingLiveReadings = {}) {
+  const byId = new Map(currentSessions.map((session) => [session.sessionId, session]));
+
+  for (const [batteryId, incoming] of Object.entries(incomingLiveReadings ?? {})) {
+    const point = incoming.stream?.at(-1);
+    if (!isRealTelemetryPoint(point)) continue;
+
+    const sessionId = incoming.sessionId || point.sessionId || `live-${batteryId}`;
+    const current = byId.get(sessionId);
+    const currentReadings = current?.readings ?? [];
+    const lastPoint = currentReadings.at(-1);
+    const isDuplicate = lastPoint && (
+      (point.timestamp && point.timestamp === lastPoint.timestamp) ||
+      (
+        point.time === lastPoint.time &&
+        point.voltage === lastPoint.voltage &&
+        point.current === lastPoint.current &&
+        point.temperature === lastPoint.temperature
+      )
+    );
+
+    byId.set(sessionId, {
+      ...current,
+      sessionId,
+      batteryId,
+      batteryName: current?.batteryName ?? "",
+      type: incoming.mode ?? current?.type ?? "DISCHARGE",
+      startTime: current?.startTime ?? point.timestamp ?? new Date().toISOString(),
+      status: incoming.status ?? current?.status ?? "running",
+      sourceFile: current?.sourceFile ?? "pi-live",
+      readings: isDuplicate ? currentReadings : [...currentReadings, point]
+    });
+  }
+
+  return Array.from(byId.values()).sort((a, b) => {
+    const bTime = new Date(b.startTime ?? 0).getTime();
+    const aTime = new Date(a.startTime ?? 0).getTime();
+    return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+  });
+}
+
 function mergeSessions(currentSessions = [], incomingSessions = []) {
   const byId = new Map(currentSessions.map((session) => [session.sessionId, session]));
   for (const incoming of incomingSessions) {
@@ -118,7 +149,6 @@ function App() {
   const [authError, setAuthError] = useState("");
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [profiles, setProfiles] = useState([]);
-  const [historicalLoaded, setHistoricalLoaded] = useState({});
   const [theme, setTheme] = useState("light");
   const [piStatus, setPiStatus] = useState({
     connected: false,
@@ -152,7 +182,10 @@ function App() {
           ...payload,
           liveReadings: Object.keys(payload.liveReadings ?? {}).length > 0
             ? mergeLiveReadings(current.liveReadings, payload.liveReadings)
-            : current.liveReadings
+            : current.liveReadings,
+          testSessions: Object.keys(payload.liveReadings ?? {}).length > 0
+            ? appendLiveReadingsToSessions(payload.testSessions ?? current.testSessions ?? [], payload.liveReadings)
+            : payload.testSessions ?? current.testSessions
         }));
         setFirebaseReady(true);
         const initialBatteryId = payload.batteries[0]?.batteryId ?? initialBattery;
@@ -280,58 +313,14 @@ function App() {
         if (firstIncomingBattery) {
           setDashboardBattery(firstIncomingBattery);
         }
-        return { ...current, liveReadings: nextLiveReadings };
+        return {
+          ...current,
+          liveReadings: nextLiveReadings,
+          testSessions: appendLiveReadingsToSessions(current.testSessions ?? [], liveReadings)
+        };
       });
     });
   }, [firebaseReady]);
-
-  useEffect(() => {
-    if (activePage !== "traceability" || !data?.testSessions?.length) return undefined;
-
-    const sessionsToLoad = data.testSessions.filter((session) => (
-      session?.sessionId &&
-      session.sourceFile === "backend" &&
-      !(session.readings?.length > 0) &&
-      !historicalLoaded[session.sessionId]
-    ));
-    if (sessionsToLoad.length === 0) return undefined;
-
-    let cancelled = false;
-    Promise.all(
-      sessionsToLoad.map((session) => (
-        getHistorical(session.sessionId)
-          .then((payload) => ({
-            sessionId: session.sessionId,
-            readings: (payload.packets ?? [])
-              .map((packet) => backendPacketToReading(packet, session.startTime))
-              .sort((a, b) => a.time - b.time)
-          }))
-          .catch((error) => {
-            console.warn(`Historical telemetry load failed for ${session.sessionId}.`, error);
-            return { sessionId: session.sessionId, readings: [] };
-          })
-      ))
-    ).then((results) => {
-      if (cancelled) return;
-      const readingsBySession = new Map(results.map((result) => [result.sessionId, result.readings]));
-      setData((current) => ({
-        ...current,
-        testSessions: (current?.testSessions ?? []).map((item) => (
-          readingsBySession.has(item.sessionId)
-            ? { ...item, readings: readingsBySession.get(item.sessionId) ?? [] }
-            : item
-        ))
-      }));
-      setHistoricalLoaded((current) => ({
-        ...current,
-        ...Object.fromEntries(results.map((result) => [result.sessionId, true]))
-      }));
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activePage, data?.testSessions, historicalLoaded]);
 
   async function handleAuthSubmit(userDetails) {
     setAuthError("");

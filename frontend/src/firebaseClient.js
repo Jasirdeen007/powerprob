@@ -59,7 +59,8 @@ async function readTestSessions(db) {
           type: session.config?.discharge_profile ?? "discharge",
           startTime: session.started_at,
           status: session.status ?? "running",
-          sourceFile: session.command?.source_file ?? "backend",
+          sourceFile: "backend",
+          sourceName: session.command?.source_file ?? "",
           readings
         };
       })
