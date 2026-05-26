@@ -18,9 +18,27 @@ import {
   CartesianGrid
 } from "recharts";
 import { Download } from "lucide-react";
-import { getMetricYDomain } from "../lib/chartDomains";
+import { getFixedMetricYDomain } from "../lib/chartDomains";
 import { buildAxisLabel } from "../lib/chartEngine";
 import { getChartOptionsForMetric, getDefaultChartType } from "../lib/chartOptions";
+import {
+  AXIS_X_PROPS,
+  AXIS_Y_PROPS,
+  CHART_MARGIN,
+  formatTimeTick,
+  formatValueTick,
+  getEvenTicksWithDomain,
+  getTimeAxisExtent,
+  scrollChartToEnd,
+  SERIES_CLIP_PROPS,
+  toYDomain,
+  xAxisLabelProps,
+  xAxisPlaceholderProps,
+  Y_AXIS_OVERLAY_MARGIN,
+  Y_AXIS_OVERLAY_WIDTH,
+  Y_AXIS_TICK_STYLE,
+  Y_AXIS_WIDTH
+} from "../lib/chartTicks";
 import { downloadCsv, downloadSvgChartPng, timestampForFile } from "../lib/exportUtils";
 
 const capitalize = (s) => (typeof s === "string" && s.length ? s[0].toUpperCase() + s.slice(1) : s);
@@ -59,18 +77,33 @@ function getStatusColor(metric, value) {
 }
 
 const TIME_SERIES_TYPES = new Set(["line", "area", "scatter", "step", "multiline"]);
-const MAX_RENDERED_TIME_TICKS = 24;
 
-function buildIntegerTicks(min, max) {
-  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [0];
-  const range = Math.max(1, max - min);
-  const step = Math.max(1, Math.ceil(range / MAX_RENDERED_TIME_TICKS));
-  const ticks = [];
-  for (let value = min; value <= max; value += step) {
-    ticks.push(value);
-  }
-  if (ticks.at(-1) !== max) ticks.push(max);
-  return ticks;
+function TimeSeriesTooltip({ active, payload, label, title, unit, isPercent }) {
+  if (!active || !payload?.length) return null;
+  const timeLabel = formatTimeTick(label);
+  const value = payload[0]?.value;
+  const formatted = Number.isFinite(Number(value))
+    ? `${Number(value).toFixed(isPercent ? 0 : 2)}${isPercent ? "%" : ` ${unit}`}`
+    : "—";
+
+  return (
+    <div
+      className="chart-tooltip"
+      style={{
+        backgroundColor: "var(--bg-surface)",
+        border: "1px solid var(--border-main)",
+        borderRadius: "6px",
+        padding: "8px 10px",
+        color: "var(--text-main)",
+        fontSize: "0.75rem"
+      }}
+    >
+      <p style={{ margin: "0 0 4px", color: "var(--text-muted)" }}>Time: {timeLabel} s</p>
+      <p style={{ margin: 0, fontWeight: 700, color: payload[0]?.color ?? "var(--text-main)" }}>
+        {title}: {formatted}
+      </p>
+    </div>
+  );
 }
 
 function TelemetryChartCard({
@@ -85,6 +118,7 @@ function TelemetryChartCard({
   showToggles = true
 }) {
   const chartRef = useRef(null);
+  const scrollRef = useRef(null);
   const options = useMemo(() => getChartOptionsForMetric(metricKey), [metricKey]);
   const defaultType = useMemo(() => getDefaultChartType(metricKey), [metricKey]);
   const [activeChart, setActiveChart] = useState(defaultType);
@@ -97,11 +131,13 @@ function TelemetryChartCard({
     ...d,
     time: typeof d.time === "number" ? d.time : Number(d.time) || 0
   })), [data]);
+
   const timeValues = useMemo(() => processedData.map((d) => d.time).filter(Number.isFinite), [processedData]);
-  const minTime = timeValues.length ? Math.floor(Math.min(...timeValues)) : 0;
-  const maxTime = timeValues.length ? Math.ceil(Math.max(...timeValues)) : 0;
-  const timeTicks = useMemo(() => buildIntegerTicks(minTime, maxTime), [maxTime, minTime]);
-  const timeSeriesWidth = Math.max(560, Math.min(4200, Math.max(processedData.length, maxTime - minTime + 1) * 12));
+  const timeAxis = useMemo(() => getTimeAxisExtent(timeValues), [timeValues]);
+  const [domainMin, domainMax] = timeAxis.domain;
+  const timeTicks = timeAxis.ticks;
+  const timeSeriesWidth = timeAxis.scrollWidth;
+
   const latestValue = processedData.length > 0 ? processedData.at(-1)?.[metricKey] ?? 0 : 0;
   const statusColor = getStatusColor(metricKey, latestValue);
   const isPercent = metricKey === "soc" || metricKey === "soh";
@@ -109,21 +145,22 @@ function TelemetryChartCard({
 
   const yDomain = useMemo(() => {
     if (forceYRange) return [forceYRange.min, forceYRange.max];
-    const values = processedData.map((d) => d[metricKey]).filter(Number.isFinite);
-    return getMetricYDomain(metricKey, values, operationMode);
-  }, [forceYRange, metricKey, operationMode, processedData]);
-  const formatTick = (v) => {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return v;
-    if (metricKey === "time") return `${Math.round(n)}`;
-    if (metricKey === "soc" || metricKey === "soh") return `${Math.round(n)}`;
-    if (Math.abs(n) >= 100) return Math.round(n).toString();
-    return n.toFixed(1);
-  };
-  const formatTimeTick = (v) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? String(Math.round(n)) : v;
-  };
+    return getFixedMetricYDomain(metricKey, operationMode);
+  }, [forceYRange, metricKey, operationMode]);
+
+  const yDomainStrict = useMemo(() => toYDomain(yDomain), [yDomain]);
+  const yTickInfo = useMemo(
+    () => getEvenTicksWithDomain(yDomainStrict[0], yDomainStrict[1], 6),
+    [yDomainStrict]
+  );
+  const yTicks = yTickInfo.ticks;
+  const yDomainAligned = yTickInfo.domain;
+
+  const formatTick = (v) => formatValueTick(metricKey, v);
+
+  useEffect(() => {
+    scrollChartToEnd(scrollRef.current);
+  }, [domainMax, processedData.length, timeSeriesWidth]);
 
   function handleDownloadPng() {
     downloadSvgChartPng(chartRef.current, `${metricKey}_chart_${timestampForFile()}.png`);
@@ -182,7 +219,7 @@ function TelemetryChartCard({
     const chartContent = (() => {
       switch (activeChart) {
         case "bar":
-          return <Bar dataKey={metricKey} fill={statusColor} radius={[2, 2, 0, 0]} isAnimationActive={false} />;
+          return <Bar dataKey={metricKey} fill={statusColor} radius={[2, 2, 0, 0]} baseValue={yDomainStrict[0]} {...SERIES_CLIP_PROPS} />;
         case "area":
           return (
             <>
@@ -192,16 +229,16 @@ function TelemetryChartCard({
                   <stop offset="95%" stopColor={statusColor} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <Area type="monotone" dataKey={metricKey} stroke={statusColor} fill={`url(#gradient-${metricKey})`} isAnimationActive={false} />
+              <Area type="monotone" dataKey={metricKey} stroke={statusColor} fill={`url(#gradient-${metricKey})`} baseValue={yDomainStrict[0]} {...SERIES_CLIP_PROPS} />
             </>
           );
         case "scatter":
-          return <Scatter dataKey={metricKey} fill={statusColor} isAnimationActive={false} />;
+          return <Scatter dataKey={metricKey} fill={statusColor} {...SERIES_CLIP_PROPS} />;
         case "step":
-          return <Line type="stepAfter" dataKey={metricKey} stroke={statusColor} dot={false} strokeWidth={2} isAnimationActive={false} />;
+          return <Line type="stepAfter" dataKey={metricKey} stroke={statusColor} dot={false} strokeWidth={2} {...SERIES_CLIP_PROPS} />;
         case "line":
         default:
-          return <Line type="monotone" dataKey={metricKey} stroke={statusColor} dot={false} strokeWidth={2} activeDot={{ r: 4 }} isAnimationActive={false} />;
+          return <Line type="monotone" dataKey={metricKey} stroke={statusColor} dot={false} strokeWidth={2} activeDot={{ r: 4 }} {...SERIES_CLIP_PROPS} />;
       }
     })();
 
@@ -215,33 +252,41 @@ function TelemetryChartCard({
 
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <ChartComponent data={processedData} margin={{ top: 8, right: 16, left: 0, bottom: 28 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+        <ChartComponent data={processedData} margin={CHART_MARGIN}>
+          <CartesianGrid clipPath="none" strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="time"
-            type="number"
-            domain={[minTime, maxTime]}
+            {...AXIS_X_PROPS}
+            // Prefer starting axis at zero so the (0,0) origin is flush with Y axis
+            domain={[Math.min(0, domainMin ?? 0), domainMax]}
             ticks={timeTicks}
             interval={0}
             tickFormatter={formatTimeTick}
             tick={{ fill: "var(--text-main)", fontSize: 10 }}
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
-            label={{ value: getAxisLabel("xlabel"), position: "insideBottom", offset: -8, fill: "var(--text-muted)", fontSize: 10 }}
+            label={xAxisLabelProps(getAxisLabel("xlabel"))}
+            padding={{ left: 0, right: 0 }}
+            allowDataOverflow={false}
           />
           <YAxis
-            domain={yDomain}
+            {...AXIS_Y_PROPS}
+            domain={yDomainAligned}
+            ticks={yTicks}
             width={0}
             tick={false}
             axisLine={false}
             tickLine={false}
           />
           <Tooltip
-            cursor={false}
-            formatter={(value) => [Number(value).toFixed(2), title]}
-            contentStyle={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-main)", borderRadius: "6px", color: "var(--text-main)" }}
-            labelStyle={{ color: "var(--text-muted)" }}
-            itemStyle={{ color: statusColor, fontWeight: 700 }}
+            cursor={{ stroke: "var(--border-strong)", strokeWidth: 1 }}
+            content={(
+              <TimeSeriesTooltip
+                title={capitalize(title)}
+                unit={unit}
+                isPercent={isPercent}
+              />
+            )}
           />
           {chartContent}
         </ChartComponent>
@@ -250,14 +295,19 @@ function TelemetryChartCard({
   }
 
   function renderChart() {
-    if (processedData.length === 0) return null;
-    if (activeChart === "progress" && isPercent) return renderProgress();
-    if (activeChart === "gauge" || activeChart === "donut") return renderRadial();
+    if (activeChart === "progress" && isPercent) {
+      return processedData.length > 0 ? renderProgress() : renderTimeSeries();
+    }
+    if (activeChart === "gauge" || activeChart === "donut") {
+      return processedData.length > 0 ? renderRadial() : renderTimeSeries();
+    }
     if (TIME_SERIES_TYPES.has(activeChart)) return renderTimeSeries();
     return renderTimeSeries();
   }
 
-  const isTimeSeries = TIME_SERIES_TYPES.has(activeChart) && processedData.length > 0;
+  const isTimeSeries = TIME_SERIES_TYPES.has(activeChart)
+    || (activeChart === "progress" && isPercent && processedData.length === 0)
+    || ((activeChart === "gauge" || activeChart === "donut") && processedData.length === 0);
 
   return (
     <div className={`telemetry-chart-card panel ${compact ? "compact" : ""}`}>
@@ -298,41 +348,39 @@ function TelemetryChartCard({
           </div>
         </div>
       </div>
-      <div style={{ display: "flex", flex: 1, minHeight: 0, position: "relative", width: "100%", overflow: "hidden" }}>
-        {/* Static Left Y-Axis Container */}
-        {isTimeSeries && (
-          <div style={{ width: "58px", flexShrink: 0, height: "100%", pointerEvents: "none" }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <RLineChart data={processedData} margin={{ top: 8, right: 0, left: 12, bottom: 28 }}>
-                <XAxis hide dataKey="time" type="number" domain={[minTime, maxTime]} />
-                <YAxis
-                  domain={yDomain}
-                  tickFormatter={formatTick}
-                  tick={{ fill: "var(--text-main)", fontSize: 10 }}
-                  tickLine={{ stroke: "var(--border-strong)" }}
-                  axisLine={{ stroke: "var(--border-strong)" }}
-                  width={46}
-                  label={{
-                    value: getAxisLabel("ylabel"),
-                    angle: -90,
-                    position: "insideLeft",
-                    offset: -2,
-                    fill: "var(--text-muted)",
-                    fontSize: 10
-                  }}
-                />
-                <Line type="monotone" dataKey={metricKey} stroke="transparent" dot={false} isAnimationActive={false} />
-              </RLineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
-        {/* Scrollable Main Chart Area */}
-        <div className="chart-scroll" style={{ flex: 1, minWidth: 0, height: "100%" }}>
-          <div className="chart-container" ref={chartRef} style={{ minWidth: isTimeSeries ? `${timeSeriesWidth}px` : undefined, height: "100%" }}>
+      <div className="chart-plot-area">
+        <div className="chart-scroll" ref={scrollRef}>
+          <div
+            className="chart-container"
+            ref={chartRef}
+            style={{ minWidth: isTimeSeries ? `${timeSeriesWidth}px` : undefined, height: "100%" }}
+          >
             {renderChart()}
           </div>
         </div>
+
+        {isTimeSeries ? (
+          <div className="chart-y-axis-overlay" style={{ width: Y_AXIS_OVERLAY_WIDTH }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <RLineChart data={processedData} margin={Y_AXIS_OVERLAY_MARGIN}>
+                <XAxis {...xAxisPlaceholderProps("time", [domainMin, domainMax])} />
+                <YAxis
+                  {...AXIS_Y_PROPS}
+                  domain={yDomainAligned}
+                  ticks={yTicks}
+                  tickFormatter={formatTick}
+                  tick={Y_AXIS_TICK_STYLE}
+                  tickLine={{ stroke: "var(--border-strong)" }}
+                  axisLine={{ stroke: "var(--border-strong)" }}
+                  width={Y_AXIS_WIDTH}
+                  allowDecimals
+                  tickMargin={4}
+                />
+                <Line type="monotone" dataKey={metricKey} stroke="transparent" dot={false} {...SERIES_CLIP_PROPS} />
+              </RLineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : null}
       </div>
     </div>
   );
