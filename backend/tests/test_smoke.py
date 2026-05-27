@@ -94,9 +94,9 @@ def test_historical_valid_and_invalid():
 def test_telemetry_valid_and_invalid():
     valid = {
         "session_id": "SESSION_TEST_B0047",
+        "battery_id": "B0047",
         "timestamp": "2026-05-18T10:15:32",
         "mode": "DISCHARGE",
-        "profile": "PULSE",
         "pack_voltage": 11.84,
         "cell_voltage": {"cell1": 3.96, "cell2": 3.94, "cell3": 3.94},
         "current": 8.42,
@@ -106,6 +106,17 @@ def test_telemetry_valid_and_invalid():
     status, body = request("POST", "/telemetry", valid)
     assert status == 200
     assert body["status"] == "accepted"
+
+    temperature_only = {
+        "session_id": "SESSION_TEMP_ONLY_B0047",
+        "battery_id": "B0047",
+        "timestamp": "2026-05-18T10:15:33",
+        "mode": "IDLE",
+        "temperature": {"battery": 34.2, "mosfet": 46.8, "ambient": 29.1},
+    }
+    status, body = request("POST", "/telemetry", temperature_only)
+    assert status == 200
+    assert body["packet"]["derived"] is None
 
     status, _ = request("POST", "/telemetry", {"session_id": "SESSION_TEST"})
     assert 400 <= status < 500

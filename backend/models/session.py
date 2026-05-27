@@ -26,6 +26,7 @@ class BatteryConfig(BaseModel):
 class SessionStartRequest(BaseModel):
     battery_id: str = Field(..., min_length=1)
     battery_name: str | None = None
+    device_id: str | None = None
     config: BatteryConfig
 
 

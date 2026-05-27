@@ -8,6 +8,7 @@ from routers.sessions import router as sessions_router
 from routers.websocket import router as websocket_router
 from services.config import settings
 from services.logging_config import setup_logging
+from services.mqtt_service import mqtt_service
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -26,6 +27,16 @@ app.include_router(sessions_router)
 app.include_router(profiles_router)
 app.include_router(historical_router)
 app.include_router(websocket_router)
+
+
+@app.on_event("startup")
+def start_mqtt_bridge():
+    mqtt_service.start()
+
+
+@app.on_event("shutdown")
+def stop_mqtt_bridge():
+    mqtt_service.stop()
 
 
 @app.middleware("http")

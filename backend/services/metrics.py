@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from models.telemetry import DerivedMetrics, EnrichedTelemetryPacket, TelemetryPacket
-from services.sessions import get_session_capacity_ah
 
 
 SOH_EOL_PERCENT = 80.0
@@ -26,12 +25,17 @@ session_states: dict[str, SessionMetricState] = {}
 
 def build_alerts(packet: TelemetryPacket) -> list[str]:
     alerts = []
-    cells = [
-        packet.cell_voltage.cell1,
-        packet.cell_voltage.cell2,
-        packet.cell_voltage.cell3,
-    ]
-    cell_delta = max(cells) - min(cells)
+    cells = []
+    if packet.cell_voltage:
+        cells = [
+            value
+            for value in [
+                packet.cell_voltage.cell1,
+                packet.cell_voltage.cell2,
+                packet.cell_voltage.cell3,
+            ]
+            if value is not None
+        ]
 
     if packet.temperature.battery >= 45:
         alerts.append("BATTERY_OVERTEMP")
@@ -39,9 +43,9 @@ def build_alerts(packet: TelemetryPacket) -> list[str]:
         alerts.append("BATTERY_TEMP_WARNING")
     if packet.temperature.mosfet >= 70:
         alerts.append("MOSFET_OVERTEMP")
-    if cell_delta >= 0.08:
+    if len(cells) >= 2 and max(cells) - min(cells) >= 0.08:
         alerts.append("CELL_IMBALANCE")
-    if packet.pack_voltage <= 9.6:
+    if packet.pack_voltage is not None and packet.pack_voltage <= 9.6:
         alerts.append("LOW_PACK_VOLTAGE")
     if packet.event:
         alerts.append(packet.event)
@@ -90,6 +94,15 @@ def estimate_rul(soh: float, completed_cycles: int) -> float:
 
 
 def enrich_packet(packet: TelemetryPacket) -> EnrichedTelemetryPacket:
+    from services.sessions import get_session_capacity_ah
+
+    if packet.current is None or packet.pack_voltage is None:
+        return EnrichedTelemetryPacket(
+            **packet.model_dump(),
+            derived=None,
+            alerts=build_alerts(packet),
+        )
+
     state = session_states.setdefault(packet.session_id, SessionMetricState())
     rated_capacity_ah = get_session_capacity_ah(packet.session_id) or DEFAULT_CAPACITY_AH
     dt_s = seconds_between(packet.timestamp, state.previous_packet.timestamp if state.previous_packet else None)

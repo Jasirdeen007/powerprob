@@ -24,7 +24,8 @@ function toIsoTimestamp(startTime, offsetSeconds) {
 }
 
 function isRealPiSession(session) {
-  return ["pi-live", "firebase-live"].includes(session?.sourceFile);
+  if (!session || session.status !== "completed") return false;
+  return ["backend", "firebase-live"].includes(session.sourceFile);
 }
 
 function isRealPiReading(reading) {

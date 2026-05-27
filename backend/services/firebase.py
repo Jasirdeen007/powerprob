@@ -53,19 +53,49 @@ def write_latest_telemetry(session_id: str, packet: dict[str, Any]) -> bool:
         return False
 
 
-def append_telemetry(session_id: str, packet: dict[str, Any]) -> bool:
+def append_live_telemetry(session_id: str, packet: dict[str, Any]) -> bool:
     local_telemetry.setdefault(session_id, []).append(packet)
     try:
-        client = get_firestore_client()
-        if not client:
+        app = get_firebase_app()
+        if not app:
             return False
 
         packet_id = packet["timestamp"].replace(":", "-").replace(".", "-")
-        client.collection("sessions").document(session_id).collection("telemetry").document(packet_id).set(packet)
+        db.reference(f"telemetry/{session_id}/packets/{packet_id}", app=app).set(packet)
         return True
     except Exception as error:
-        logger.warning("Failed to append telemetry to Firestore: %s", error)
+        logger.warning("Failed to append live telemetry to Firebase RTDB: %s", error)
         return False
+
+
+def append_telemetry(session_id: str, packet: dict[str, Any]) -> bool:
+    return append_live_telemetry(session_id, packet)
+
+
+def finalize_session_telemetry(session_id: str) -> int:
+    packets = local_telemetry.get(session_id, [])
+    try:
+        app = get_firebase_app()
+        client = get_firestore_client()
+        if app:
+            snapshot = db.reference(f"telemetry/{session_id}/packets", app=app).get() or {}
+            if isinstance(snapshot, dict):
+                packets = list(snapshot.values())
+
+        if client:
+            for packet in packets:
+                packet_id = str(packet.get("timestamp", "")).replace(":", "-").replace(".", "-")
+                if not packet_id:
+                    continue
+                client.collection("sessions").document(session_id).collection("telemetry").document(packet_id).set(packet)
+
+        if app:
+            db.reference(f"telemetry/{session_id}", app=app).delete()
+
+        return len(packets)
+    except Exception as error:
+        logger.warning("Failed to finalize telemetry for session %s: %s", session_id, error)
+        return 0
 
 
 def save_session(session_id: str, session: dict[str, Any]) -> bool:

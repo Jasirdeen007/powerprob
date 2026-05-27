@@ -46,11 +46,13 @@ async function readTestSessions(db) {
     const sessions = await Promise.all(
       backendSessionsSnapshot.docs.map(async (sessionDoc) => {
         const session = sessionDoc.data();
+        if (session.status !== "completed") return null;
         const telemetrySnapshot = await getDocs(collection(db, "sessions", sessionDoc.id, "telemetry"));
         const readings = telemetrySnapshot.docs
           .map((readingDoc) => backendTelemetryToReading(readingDoc.data(), session.started_at))
           .filter(Boolean)
           .sort((a, b) => a.time - b.time);
+        if (readings.length === 0) return null;
 
         return {
           sessionId: session.session_id ?? sessionDoc.id,
@@ -65,7 +67,7 @@ async function readTestSessions(db) {
         };
       })
     );
-    return sessions;
+    return sessions.filter(Boolean);
   }
 
   const sessionsSnapshot = await getDocs(collection(db, "testSessions"));
