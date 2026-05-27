@@ -9,40 +9,66 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  CartesianGrid,
-  Legend
+  CartesianGrid
 } from "recharts";
-import { memo, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { Download } from "lucide-react";
 import { getCustomYDomain } from "../lib/chartDomains";
-import { buildAxisLabel } from "../lib/chartEngine";
+import { buildAxisLabel, VARIABLES } from "../lib/chartEngine";
+import {
+  AXIS_X_PROPS,
+  AXIS_Y_PROPS,
+  buildAlignedDualTicks,
+  CUSTOM_CHART_MARGIN,
+  CUSTOM_CHART_MARGIN_DUAL_RIGHT,
+  CUSTOM_Y_AXIS_OVERLAY_MARGIN,
+  CUSTOM_Y_AXIS_OVERLAY_MARGIN_RIGHT,
+  formatGenericValueTick,
+  formatTimeTick,
+  getEvenTicksWithDomain,
+  getTimeAxisExtent,
+  scrollChartToEnd,
+  SERIES_CLIP_PROPS,
+  toYDomain,
+  xAxisLabelProps,
+  xAxisPlaceholderProps,
+  Y_AXIS_OVERLAY_WIDTH,
+  Y_AXIS_TICK_STYLE,
+  Y_AXIS_WIDTH
+} from "../lib/chartTicks";
 import { downloadCsv, downloadSvgChartPng, timestampForFile } from "../lib/exportUtils";
 
 const SERIES_COLORS = { y1: "#246bfe", y2: "#15915b" };
-const MAX_RENDERED_TIME_TICKS = 24;
 
-function buildIntegerTicks(min, max) {
-  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [0];
-  const range = Math.max(1, max - min);
-  const step = Math.max(1, Math.ceil(range / MAX_RENDERED_TIME_TICKS));
-  const ticks = [];
-  for (let value = min; value <= max; value += step) {
-    ticks.push(value);
-  }
-  if (ticks.at(-1) !== max) ticks.push(max);
-  return ticks;
-}
+function CustomChartTooltip({ active, payload, label, xIsTime }) {
+  if (!active || !payload?.length) return null;
 
-function formatTick(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return value;
-  if (Math.abs(n) >= 100) return Math.round(n).toString();
-  if (Math.abs(n) >= 10) return n.toFixed(1);
-  return n.toFixed(2);
+  return (
+    <div
+      className="chart-tooltip"
+      style={{
+        backgroundColor: "var(--bg-surface)",
+        border: "1px solid var(--border-main)",
+        borderRadius: "6px",
+        padding: "8px 10px",
+        color: "var(--text-main)",
+        fontSize: "0.75rem"
+      }}
+    >
+      <p style={{ margin: "0 0 6px", color: "var(--text-muted)" }}>
+        {xIsTime ? `Time: ${formatTimeTick(label)} s` : `X: ${formatGenericValueTick(label)}`}
+      </p>
+      {payload.map((entry) => (
+        <p key={entry.dataKey} style={{ margin: "2px 0", fontWeight: 700, color: entry.color }}>
+          {entry.name}: {Number(entry.value).toFixed(2)}
+        </p>
+      ))}
+    </div>
+  );
 }
 
 function CustomChartPanel({ config, data, operationMode = "discharge" }) {
-  if (!config || data.length === 0) {
+  if (!config) {
     return (
       <div className="custom-chart-empty panel">
         <p>Select axes and apply to view a live custom chart.</p>
@@ -50,11 +76,12 @@ function CustomChartPanel({ config, data, operationMode = "discharge" }) {
     );
   }
 
-  return <RenderedCustomChart config={config} data={data} operationMode={operationMode} />;
+  return <RenderedCustomChart config={config} data={data ?? []} operationMode={operationMode} />;
 }
 
 function RenderedCustomChart({ config, data, operationMode }) {
   const chartRef = useRef(null);
+  const scrollRef = useRef(null);
 
   const processed = useMemo(() => data.map((row) => ({
     ...row,
@@ -63,35 +90,68 @@ function RenderedCustomChart({ config, data, operationMode }) {
     ...(config.y2 ? { [config.y2]: Number(row[config.y2]) || 0 } : {})
   })), [config, data]);
 
-  const y1Values = processed.map((r) => r[config.y1]);
-  const y2Values = config.y2 ? processed.map((r) => r[config.y2]) : [];
-  const xValues = processed.map((r) => r[config.x]);
+  const y1Domain = toYDomain(getCustomYDomain(config.y1, [], operationMode));
+  const y2Domain = config.y2 ? toYDomain(getCustomYDomain(config.y2, [], operationMode)) : null;
 
-  const y1Domain = getCustomYDomain(config.y1, y1Values, operationMode);
-  const y2Domain = config.y2 ? getCustomYDomain(config.y2, y2Values, operationMode) : null;
-  const xDomain = config.x === "time" ? ["auto", "auto"] : getCustomYDomain(config.x, xValues, operationMode);
+  const xValues = processed.map((r) => r[config.x]).filter(Number.isFinite);
+  const xIsTime = config.x === "time";
+  const timeAxis = useMemo(
+    () => (xIsTime ? getTimeAxisExtent(xValues) : null),
+    [xIsTime, xValues]
+  );
 
-  const xLabelBase = buildAxisLabel(config.x, config.x === "time" ? null : xDomain);
-  const xLabel = config.x === "time" ? `${xLabelBase} (s)` : xLabelBase;
+  const xDomain = xIsTime
+    ? timeAxis.domain
+    : getCustomYDomain(config.x, xValues, operationMode);
+  const xTicks = xIsTime ? timeAxis.ticks : getEvenTicksWithDomain(xDomain[0], xDomain[1], 6).ticks;
+  const chartWidth = xIsTime ? timeAxis.scrollWidth : 760;
+
+  const useDual = config.y2 && config.chart === "multi_line" && config.dual_axis;
+  const alignedTicks = useDual && y2Domain
+    ? buildAlignedDualTicks(y1Domain, y2Domain)
+    : null;
+  const y1TickInfo = useMemo(
+    () => (alignedTicks ? { ticks: alignedTicks.leftTicks, domain: alignedTicks.leftDomain } : getEvenTicksWithDomain(y1Domain[0], y1Domain[1], 6)),
+    [alignedTicks, y1Domain]
+  );
+  const y2TickInfo = useMemo(
+    () => {
+      if (!y2Domain) return null;
+      if (alignedTicks) return { ticks: alignedTicks.rightTicks, domain: alignedTicks.rightDomain };
+      return getEvenTicksWithDomain(y2Domain[0], y2Domain[1], 6);
+    },
+    [alignedTicks, y2Domain]
+  );
+  const y1Ticks = y1TickInfo.ticks;
+  const y2Ticks = y2TickInfo?.ticks ?? null;
+  const y1DomainAligned = y1TickInfo.domain;
+  const y2DomainAligned = y2TickInfo?.domain ?? null;
+
+  const xLabelBase = buildAxisLabel(config.x, xIsTime ? null : xDomain);
+  const xLabel = xLabelBase;
   const y1Label = buildAxisLabel(config.y1, y1Domain);
   const y2Label = config.y2 ? buildAxisLabel(config.y2, y2Domain) : null;
 
-  const useDual = config.y2 && config.chart === "multi_line" && config.dual_axis;
-  const xIsTime = config.x === "time";
-  const minTime = xIsTime && xValues.length ? Math.floor(Math.min(...xValues)) : 0;
-  const maxTime = xIsTime && xValues.length ? Math.ceil(Math.max(...xValues)) : 0;
-  const timeTicks = useMemo(() => xIsTime ? buildIntegerTicks(minTime, maxTime) : undefined, [maxTime, minTime, xIsTime]);
-  const chartWidth = xIsTime ? Math.max(680, Math.min(4200, Math.max(processed.length, maxTime - minTime + 1) * 12)) : 760;
-  const chartMargin = {
-    top: 16,
-    right: useDual ? 52 : 20,
-    left: 56,
-    bottom: config.y2 ? 36 : 28
+  const xAxisProps = {
+    ...AXIS_X_PROPS,
+    // Ensure domain starts at 0 when possible so tick "0" aligns with Y axis
+    domain: xDomain ? [Math.min(0, xDomain[0] ?? 0), xDomain[1] ?? xDomain[0]] : xDomain,
+    ticks: xTicks,
+    interval: 0
   };
+
+  const scrollMargin = useDual ? CUSTOM_CHART_MARGIN_DUAL_RIGHT : CUSTOM_CHART_MARGIN;
+  const yOverlayMargin = CUSTOM_Y_AXIS_OVERLAY_MARGIN;
+  const yOverlayMarginRight = CUSTOM_Y_AXIS_OVERLAY_MARGIN_RIGHT;
+
+  useEffect(() => {
+    if (!xIsTime) return;
+    scrollChartToEnd(scrollRef.current);
+  }, [xDomain?.[1], processed.length, xIsTime, chartWidth]);
 
   function renderSeries() {
     if (config.chart === "scatter") {
-      return <Scatter dataKey={config.y1} name={VARIABLES_LABEL(config.y1)} fill={SERIES_COLORS.y1} yAxisId="left" isAnimationActive={false} />;
+      return <Scatter dataKey={config.y1} name={VARIABLES_LABEL(config.y1)} fill={SERIES_COLORS.y1} yAxisId="left" {...SERIES_CLIP_PROPS} />;
     }
 
     if (config.chart === "area") {
@@ -103,7 +163,7 @@ function RenderedCustomChart({ config, data, operationMode }) {
               <stop offset="95%" stopColor={SERIES_COLORS.y1} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <Area type="monotone" dataKey={config.y1} stroke={SERIES_COLORS.y1} fill="url(#custom-area-gradient)" yAxisId="left" isAnimationActive={false} />
+          <Area type="monotone" dataKey={config.y1} stroke={SERIES_COLORS.y1} fill="url(#custom-area-gradient)" yAxisId="left" baseValue={y1Domain[0]} {...SERIES_CLIP_PROPS} />
         </>
       );
     }
@@ -119,7 +179,7 @@ function RenderedCustomChart({ config, data, operationMode }) {
             dot={false}
             strokeWidth={2}
             yAxisId="left"
-            isAnimationActive={false}
+            {...SERIES_CLIP_PROPS}
           />
           <Line
             type="monotone"
@@ -129,7 +189,7 @@ function RenderedCustomChart({ config, data, operationMode }) {
             dot={false}
             strokeWidth={2}
             yAxisId={useDual ? "right" : "left"}
-            isAnimationActive={false}
+            {...SERIES_CLIP_PROPS}
           />
         </>
       );
@@ -143,15 +203,12 @@ function RenderedCustomChart({ config, data, operationMode }) {
         dot={false}
         strokeWidth={2}
         yAxisId="left"
-        isAnimationActive={false}
+        {...SERIES_CLIP_PROPS}
       />
     );
   }
 
   const ChartType = config.chart === "scatter" ? ScatterChart : config.chart === "area" ? AreaChart : LineChart;
-  const xAxisProps = xIsTime
-    ? { type: "number", domain: [minTime, maxTime], ticks: timeTicks, interval: 0 }
-    : { type: "number", domain: xDomain };
 
   function handleDownloadPng() {
     downloadSvgChartPng(chartRef.current, `custom_chart_${timestampForFile()}.png`);
@@ -166,13 +223,6 @@ function RenderedCustomChart({ config, data, operationMode }) {
     const exportColumns = columns.map((key) => (key === "time" ? "time_s" : key));
     downloadCsv(rows, exportColumns, `custom_chart_${timestampForFile()}.csv`);
   }
-
-  const mainChartMargin = {
-    top: 16,
-    right: 20,
-    left: 0,
-    bottom: config.y2 ? 36 : 28
-  };
 
   return (
     <div className="custom-chart-panel panel">
@@ -197,45 +247,29 @@ function RenderedCustomChart({ config, data, operationMode }) {
         </div>
       </div>
       {config.warning ? <p className="custom-chart-warning">{config.warning}</p> : null}
-      
-      <div style={{ display: "flex", width: "100%", height: "320px", marginTop: "10px", position: "relative", overflow: "hidden" }}>
-        {/* Left Static Y-Axis Container */}
-        <div style={{ width: "56px", flexShrink: 0, height: "100%", pointerEvents: "none" }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={processed} margin={{ top: 16, right: 0, left: 12, bottom: config.y2 ? 36 : 28 }}>
-              <XAxis hide dataKey={config.x} {...xAxisProps} />
-              <YAxis
-                yAxisId="left"
-                domain={y1Domain}
-                tickFormatter={formatTick}
-                tick={{ fill: "var(--text-main)", fontSize: 10 }}
-                tickLine={{ stroke: "var(--border-strong)" }}
-                axisLine={{ stroke: "var(--border-strong)" }}
-                width={44}
-              />
-              <Line yAxisId="left" type="monotone" dataKey={config.y1} stroke="transparent" dot={false} isAnimationActive={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
 
-        {/* Scrollable Main Chart Area */}
-        <div className="custom-chart-scroll" style={{ flex: 1, minWidth: 0, height: "100%" }}>
-          <div className="custom-chart-canvas" ref={chartRef} style={{ minWidth: `${chartWidth}px`, height: "100%", marginTop: 0 }}>
+      <div className="chart-plot-area" style={{ height: "320px", marginTop: "10px" }}>
+        <div className="custom-chart-scroll chart-scroll" ref={scrollRef}>
+          <div className="custom-chart-canvas" ref={chartRef} style={{ minWidth: `${chartWidth}px`, height: "100%" }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ChartType data={processed} margin={mainChartMargin}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <ChartType data={processed} margin={scrollMargin}>
+                <CartesianGrid clipPath="none" strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis
                   dataKey={config.x}
                   {...xAxisProps}
-                  tickFormatter={xIsTime ? (value) => String(Math.round(Number(value))) : formatTick}
+                    padding={{ left: 0, right: 0 }}
+                    allowDataOverflow={false}
+                  tickFormatter={xIsTime ? formatTimeTick : formatGenericValueTick}
                   tick={{ fill: "var(--text-main)", fontSize: 10 }}
                   tickLine={false}
                   axisLine={{ stroke: "var(--border)" }}
-                  label={{ value: xLabel, position: "insideBottom", offset: -4, fill: "var(--text-muted)", fontSize: 10 }}
+                  label={xAxisLabelProps(xLabel)}
                 />
                 <YAxis
                   yAxisId="left"
-                  domain={y1Domain}
+                  {...AXIS_Y_PROPS}
+                  domain={y1DomainAligned}
+                  ticks={y1Ticks}
                   width={0}
                   tick={false}
                   axisLine={false}
@@ -245,7 +279,9 @@ function RenderedCustomChart({ config, data, operationMode }) {
                   <YAxis
                     yAxisId="right"
                     orientation="right"
-                    domain={y2Domain}
+                    {...AXIS_Y_PROPS}
+                    domain={y2DomainAligned}
+                    ticks={y2Ticks}
                     width={0}
                     tick={false}
                     axisLine={false}
@@ -253,48 +289,61 @@ function RenderedCustomChart({ config, data, operationMode }) {
                   />
                 ) : null}
                 <Tooltip
-                  formatter={(value, name) => [Number(value).toFixed(2), name]}
-                  contentStyle={{
-                    backgroundColor: "var(--bg-surface)",
-                    border: "1px solid var(--border-main)",
-                    borderRadius: "6px",
-                    color: "var(--text-main)"
-                  }}
+                  cursor={{ stroke: "var(--border-strong)", strokeWidth: 1 }}
+                  content={<CustomChartTooltip xIsTime={xIsTime} />}
                 />
-                {config.y2 ? (
-                  <Legend
-                    verticalAlign="bottom"
-                    height={24}
-                    wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-                  />
-                ) : null}
                 {renderSeries()}
               </ChartType>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Right Static Y-Axis Container */}
-        {useDual && (
-          <div style={{ width: "56px", flexShrink: 0, height: "100%", pointerEvents: "none" }}>
+        <div className="chart-y-axis-overlay" style={{ width: Y_AXIS_OVERLAY_WIDTH }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={processed} margin={yOverlayMargin}>
+              <XAxis {...xAxisPlaceholderProps(config.x, xDomain)} />
+              <YAxis
+                yAxisId="left"
+                {...AXIS_Y_PROPS}
+                domain={y1DomainAligned}
+                ticks={y1Ticks}
+                tickFormatter={formatGenericValueTick}
+                tick={Y_AXIS_TICK_STYLE}
+                tickLine={{ stroke: "var(--border-strong)" }}
+                axisLine={{ stroke: "var(--border-strong)" }}
+                width={Y_AXIS_WIDTH}
+                allowDecimals
+                tickMargin={4}
+              />
+              <Line yAxisId="left" type="monotone" dataKey={config.y1} stroke="transparent" dot={false} {...SERIES_CLIP_PROPS} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {useDual ? (
+          <div className="chart-y-axis-overlay-right" style={{ width: Y_AXIS_OVERLAY_WIDTH }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={processed} margin={{ top: 16, right: 12, left: 0, bottom: config.y2 ? 36 : 28 }}>
-                <XAxis hide dataKey={config.x} {...xAxisProps} />
+              <LineChart data={processed} margin={yOverlayMarginRight}>
+                <XAxis {...xAxisPlaceholderProps(config.x, xDomain)} />
                 <YAxis
                   yAxisId="right"
                   orientation="right"
-                  domain={y2Domain}
-                  tickFormatter={formatTick}
-                  tick={{ fill: "var(--text-main)", fontSize: 10 }}
+                  {...AXIS_Y_PROPS}
+                  domain={y2DomainAligned}
+                  ticks={y2Ticks}
+                  tickFormatter={formatGenericValueTick}
+                  tick={Y_AXIS_TICK_STYLE}
                   tickLine={{ stroke: "var(--border-strong)" }}
                   axisLine={{ stroke: "var(--border-strong)" }}
-                  width={44}
+                  width={Y_AXIS_WIDTH}
+                  allowDecimals
+                  tickMargin={4}
                 />
-                <Line yAxisId="right" type="monotone" dataKey={config.y2} stroke="transparent" dot={false} isAnimationActive={false} />
+                <Line yAxisId="right" type="monotone" dataKey={config.y2} stroke="transparent" dot={false} {...SERIES_CLIP_PROPS} />
               </LineChart>
             </ResponsiveContainer>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -303,14 +352,5 @@ function RenderedCustomChart({ config, data, operationMode }) {
 export default memo(CustomChartPanel);
 
 function VARIABLES_LABEL(key) {
-  const labels = {
-    voltage: "Voltage",
-    current: "Current",
-    temperature: "Temp",
-    soc: "SOC",
-    soh: "SOH",
-    power: "Power",
-    time: "Time"
-  };
-  return labels[key] ?? key;
+  return VARIABLES[key]?.label ?? key;
 }

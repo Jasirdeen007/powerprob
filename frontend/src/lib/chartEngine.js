@@ -102,8 +102,6 @@ export function buildAxisLabel(key, domain = null) {
     return `${meta.label} (${min.toFixed(decimals)}–${max.toFixed(decimals)} ${unit})`;
   }
 
-  // For time, omit the unit in the concise label
-  if (key === "time") return meta.label;
   return `${meta.label} (${meta.unit})`;
 }
 

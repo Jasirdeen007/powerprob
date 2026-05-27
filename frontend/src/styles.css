@@ -4510,12 +4510,48 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   height: 100%;
 }
 
+.chart-plot-area {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Keep Y=0 points and bottom tick labels from clipping at the plot edge */
+.chart-plot-area .recharts-wrapper,
+.chart-plot-area .recharts-surface {
+  overflow: visible;
+}
+
+.chart-y-axis-overlay,
+.chart-y-axis-overlay-right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: var(--bg-surface);
+}
+
+.chart-y-axis-overlay {
+  left: 0;
+  width: 92px;
+}
+
+.chart-y-axis-overlay-right {
+  right: 0;
+  width: 92px;
+}
+
 .chart-scroll,
 .custom-chart-scroll {
   flex: 1;
   min-height: 0;
   overflow-x: auto;
   overflow-y: hidden;
+  scroll-behavior: smooth;
   scrollbar-width: thin;
 }
 

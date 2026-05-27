@@ -6,67 +6,35 @@ const CHARGE_RANGES = {
   voltage: { min: 0, max: 60, pad: 0.05 },
   current: { min: 0, max: 50, pad: 0.1 },
   power: { min: 0, max: 500, pad: 0.1 },
-  // Use a realistic full range for temperature (0–100°C) so charts start at 0
   temperature: { min: 0, max: 100, pad: 0.08 },
   soc: { min: 0, max: 100 },
   soh: { min: 0, max: 100 }
 };
 
 const DISCHARGE_RANGES = {
-  voltage: { min: null, max: null, pad: 0.08 },
-  current: { min: 0, max: null, pad: 0.12 },
-  power: { min: 0, max: null, pad: 0.12 },
-  // For discharge, allow temperature to start from 0 to capture full range
+  voltage: { min: 0, max: 60, pad: 0.08 },
+  current: { min: 0, max: 50, pad: 0.12 },
+  power: { min: 0, max: 500, pad: 0.12 },
   temperature: { min: 0, max: 100, pad: 0.1 },
   soc: { min: 0, max: 100 },
   soh: { min: 0, max: 100 }
 };
 
-function roundUp(value, decimals = 1) {
-  const factor = 10 ** decimals;
-  return Math.ceil(value * factor) / factor;
-}
-
-function roundDown(value, decimals = 1) {
-  const factor = 10 ** decimals;
-  return Math.floor(value * factor) / factor;
-}
-
-export function getMetricYDomain(metricKey, values, operationMode = "discharge") {
-  const finite = values.filter(Number.isFinite);
-  if (finite.length === 0) {
-    return ["auto", "auto"];
-  }
-
+function resolveFixedRange(metricKey, operationMode = "discharge") {
   const preset = operationMode === "charge" ? CHARGE_RANGES : DISCHARGE_RANGES;
-  const range = preset[metricKey];
-  if (!range) {
-    return ["auto", "auto"];
-  }
+  const range = preset[metricKey] ?? CHARGE_RANGES[metricKey];
+  if (!range) return null;
 
-  if (range.min != null && range.max != null && range.min === 0 && range.max === 100) {
-    return [0, 100];
-  }
+  const fallback = CHARGE_RANGES[metricKey] ?? {};
+  let min = range.min ?? fallback.min ?? 0;
+  let max = range.max ?? fallback.max;
 
-  const dataMin = Math.min(...finite);
-  const dataMax = Math.max(...finite);
-  const pad = range.pad ?? 0.1;
-
-  let min = range.min;
-  let max = range.max;
-
-  if (ZERO_BASED_METRICS.has(metricKey) && (min == null || min === 0)) {
+  if (ZERO_BASED_METRICS.has(metricKey) && (min == null || min < 0)) {
     min = 0;
   }
 
-  if (min == null) {
-    min = roundDown(dataMin - (dataMax - dataMin) * pad);
-  }
-
   if (max == null) {
-    max = roundUp(dataMax + (dataMax - dataMin || dataMax || 1) * pad);
-  } else if (dataMax > max * 0.85) {
-    max = roundUp(Math.max(max, dataMax * 1.1));
+    max = fallback.max ?? min + 1;
   }
 
   if (min >= max) {
@@ -76,9 +44,30 @@ export function getMetricYDomain(metricKey, values, operationMode = "discharge")
   return [min, max];
 }
 
+/** Fixed Y domain from expected sensor range — does not rescale with incoming data. */
+export function getFixedMetricYDomain(metricKey, operationMode = "discharge") {
+  const domain = resolveFixedRange(metricKey, operationMode);
+  if (domain) return domain;
+  return [0, 1];
+}
+
+/** @deprecated Use getFixedMetricYDomain for chart rendering. Kept for compatibility. */
+export function getMetricYDomain(metricKey, values, operationMode = "discharge") {
+  const fixed = resolveFixedRange(metricKey, operationMode);
+  if (fixed) return fixed;
+
+  const finite = values.filter(Number.isFinite);
+  if (finite.length === 0) return [0, 1];
+
+  const dataMin = Math.min(...finite);
+  const dataMax = Math.max(...finite);
+  if (dataMin >= dataMax) return [dataMin, dataMax + 1];
+  return [dataMin, dataMax];
+}
+
 export function getCustomYDomain(metricKey, values, operationMode = "discharge") {
   if (VARIABLES[metricKey]?.type === "percentage") {
     return [0, 100];
   }
-  return getMetricYDomain(metricKey, values, operationMode);
+  return getFixedMetricYDomain(metricKey, operationMode);
 }
