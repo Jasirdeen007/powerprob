@@ -100,6 +100,14 @@ function mergeLiveReadings(currentLiveReadings, incomingLiveReadings) {
   return merged;
 }
 
+function resetLiveReadings(currentLiveReadings, fallbackBatteryId) {
+  const ids = Object.keys(currentLiveReadings ?? {});
+  const batteryIds = ids.length > 0 ? ids : [fallbackBatteryId];
+  return Object.fromEntries(
+    batteryIds.map((batteryId) => [batteryId, makeZeroLiveReading(batteryId)])
+  );
+}
+
 function isRealTelemetryPoint(reading) {
   if (!reading) return false;
   if (reading.timestamp) return true;
@@ -182,6 +190,12 @@ function App() {
     transport: "websocket",
     endpoint: "/ws/pi"
   });
+  const [activeRun, setActiveRun] = useState({
+    sessionId: "",
+    deviceId: "",
+    isRunning: false,
+    isPaused: false
+  });
   const userId = currentUser?.uid || appUser.uid;
 
   useEffect(() => {
@@ -233,7 +247,7 @@ function App() {
       cancelled = true;
       if (timeoutId) window.clearTimeout(timeoutId);
     };
-  }, []);
+  }, [initialBattery, userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -248,15 +262,30 @@ function App() {
         if (cancelled) return;
         setProfiles(profilesPayload.profiles ?? []);
 
-        const backendSessions = (sessionsPayload.sessions ?? []).map((session) => ({
-          sessionId: session.session_id,
-          batteryId: session.battery_id,
-          batteryName: session.battery_name ?? "",
-          type: session.config?.discharge_profile ?? "discharge",
-          startTime: session.started_at,
-          status: session.status,
-          sourceFile: "backend",
-          readings: []
+        const backendSessions = await Promise.all((sessionsPayload.sessions ?? []).map(async (session) => {
+          let readings = [];
+          if (session.status === "completed") {
+            try {
+              const historical = await getHistorical(session.session_id, { userId });
+              readings = (historical.packets ?? [])
+                .map((packet) => backendTelemetryToReading(packet, session.started_at))
+                .filter(Boolean);
+            } catch (error) {
+              console.warn(`Historical packets failed to load for ${session.session_id}.`, error);
+            }
+          }
+
+          return {
+            sessionId: session.session_id,
+            batteryId: session.battery_id,
+            batteryName: session.battery_name ?? "",
+            deviceId: session.device_id ?? "",
+            type: session.config?.discharge_profile ?? "discharge",
+            startTime: session.started_at,
+            status: session.status,
+            sourceFile: "backend",
+            readings
+          };
         }));
 
         if (backendSessions.length > 0) {
@@ -264,6 +293,20 @@ function App() {
             ...current,
             testSessions: mergeSessions(current?.testSessions ?? [], backendSessions)
           }));
+
+          const runningSession = backendSessions.find((session) => session.status === "running");
+          if (runningSession) {
+            setActiveRun((current) => (
+              current.sessionId
+                ? current
+                : {
+                  sessionId: runningSession.sessionId,
+                  deviceId: runningSession.deviceId ?? "",
+                  isRunning: true,
+                  isPaused: false
+                }
+            ));
+          }
         }
       } catch (error) {
         console.warn("Backend catalog load failed; using available Firebase/demo data.", error);
@@ -275,7 +318,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -310,19 +353,24 @@ function App() {
 
     async function refreshBackendLiveTelemetry() {
       try {
-        const payload = await getLiveTelemetry(userId);
+        const payload = await getLiveTelemetry(userId, { scope: "all" });
         const liveReadings = backendTelemetryToLiveReadings(payload.telemetry ?? {});
-        if (cancelled || Object.keys(liveReadings).length === 0) return;
+        if (cancelled) return;
         setData((current) => {
           if (!current) return current;
+          if (Object.keys(liveReadings).length === 0) {
+            return {
+              ...current,
+              liveReadings: resetLiveReadings(current.liveReadings, dashboardBattery || initialBattery)
+            };
+          }
           const firstIncomingBattery = Object.keys(liveReadings)[0];
           if (firstIncomingBattery) {
             setDashboardBattery(firstIncomingBattery);
           }
           return {
             ...current,
-            liveReadings: mergeLiveReadings(current.liveReadings, liveReadings),
-            testSessions: appendLiveReadingsToSessions(current.testSessions ?? [], liveReadings)
+            liveReadings: mergeLiveReadings(current.liveReadings, liveReadings)
           };
         });
       } catch (error) {
@@ -336,7 +384,7 @@ function App() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [userId]);
+  }, [dashboardBattery, initialBattery, userId]);
 
   useEffect(() => {
     if (!authEnabled) return undefined;
@@ -370,6 +418,9 @@ function App() {
     return subscribeLiveReadings(userId, (liveReadings) => {
       setData((current) => {
         if (!current) return current;
+        if (Object.keys(liveReadings ?? {}).length === 0) {
+          return current;
+        }
         const nextLiveReadings = mergeLiveReadings(current.liveReadings, liveReadings);
         const firstIncomingBattery = Object.keys(liveReadings ?? {})[0];
         if (firstIncomingBattery) {
@@ -442,6 +493,12 @@ function App() {
 
   async function handleStartSession(payload) {
     const response = await startSession({ ...payload, user_id: userId });
+    setActiveRun({
+      sessionId: response.session_id,
+      deviceId: response.device_id ?? "",
+      isRunning: true,
+      isPaused: false
+    });
     const nextSession = {
       sessionId: response.session_id,
       batteryId: payload.battery_id,
@@ -499,16 +556,28 @@ function App() {
       ))
     }));
     setDashboardBattery(stoppedBatteryId);
+    setActiveRun({
+      sessionId: "",
+      deviceId: "",
+      isRunning: false,
+      isPaused: false
+    });
     return response;
   }
 
-  function handlePauseSession(sessionId, paused, deviceId) {
-    return sendPiCommand({
+  async function handlePauseSession(sessionId, paused, deviceId) {
+    const response = await sendPiCommand({
       type: paused ? "PAUSE_PROFILE" : "RESUME_PROFILE",
       sessionId,
       deviceId,
       command: { paused }
     });
+    setActiveRun((current) => (
+      current.sessionId === sessionId
+        ? { ...current, isPaused: paused }
+        : current
+    ));
+    return response;
   }
 
   if (authView !== "app") {
@@ -558,6 +627,7 @@ function App() {
             livePoint={livePoint}
             liveStream={live.stream}
             activeBattery={live.batteryId ?? dashboardBattery}
+            activeSession={activeRun}
             selectedSession={dashboardSession}
             profiles={profiles}
             onStartSession={handleStartSession}

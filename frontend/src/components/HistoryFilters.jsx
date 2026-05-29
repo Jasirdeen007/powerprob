@@ -8,6 +8,9 @@ const PRESETS = [
 function HistoryFilters({
   preset,
   onPresetChange,
+  sessionId,
+  sessionOptions = [],
+  onSessionChange,
   customStart,
   customEnd,
   onCustomStartChange,
@@ -40,6 +43,23 @@ function HistoryFilters({
       ) : null}
 
       <div className="history-filters-layout">
+        <div className="history-filter-block history-filter-session">
+          <div className="history-filter-block-head">
+            <span className="history-filter-label">Session</span>
+          </div>
+          <select
+            value={sessionId}
+            onChange={(event) => onSessionChange(event.target.value)}
+          >
+            <option value="ALL">All sessions</option>
+            {sessionOptions.map((session) => (
+              <option key={session.sessionId} value={session.sessionId}>
+                {session.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="history-filter-block history-filter-date">
           <div className="history-filter-block-head">
             <span className="history-filter-label">Date range</span>

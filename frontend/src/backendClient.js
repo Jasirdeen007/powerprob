@@ -63,8 +63,9 @@ export function getPiStatus() {
   return request("/pi/status");
 }
 
-export function getLiveTelemetry(userId) {
-  const params = new URLSearchParams({ user_id: userId });
+export function getLiveTelemetry(userId, { scope = "user" } = {}) {
+  const params = new URLSearchParams({ scope });
+  if (userId) params.set("user_id", userId);
   return request(`/telemetry/live?${params.toString()}`);
 }
 

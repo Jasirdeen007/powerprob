@@ -61,13 +61,40 @@ function toInputDateTime(value) {
 
 function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
   const [preset, setPreset] = useState("NONE");
+  const [selectedSessionId, setSelectedSessionId] = useState("ALL");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [activeView, setActiveView] = useState("charts");
   const [exportOpen, setExportOpen] = useState(false);
 
+  const realSessions = useMemo(() => {
+    return (data?.testSessions ?? [])
+      .filter(isRealPiSession)
+      .sort((a, b) => {
+        const bTime = new Date(b.startTime ?? 0).getTime();
+        const aTime = new Date(a.startTime ?? 0).getTime();
+        return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+      });
+  }, [data]);
+
+  const sessionOptions = useMemo(() => {
+    return realSessions.map((session) => {
+      const startedAt = session.startTime ? new Date(session.startTime) : null;
+      const dateLabel = startedAt && Number.isFinite(startedAt.getTime())
+        ? startedAt.toLocaleString()
+        : "Unknown date";
+      const batteryLabel = session.batteryName
+        ? `${session.batteryName} (${session.batteryId})`
+        : session.batteryId || "Unknown battery";
+      const readingCount = session.readings?.filter(isRealPiReading).length ?? 0;
+      return {
+        sessionId: session.sessionId,
+        label: `${dateLabel} - ${batteryLabel} - ${readingCount} packets`
+      };
+    });
+  }, [realSessions]);
+
   const records = useMemo(() => {
-    const realSessions = (data?.testSessions ?? []).filter(isRealPiSession);
     const allRows = realSessions.flatMap((session) => {
       return (session.readings ?? []).filter(isRealPiReading).map((reading) => {
         const timestamp = reading.timestamp || toIsoTimestamp(session.startTime, reading.time);
@@ -96,7 +123,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
       });
     });
     return allRows.filter((row) => Number.isFinite(row.timestampMs)).sort((a, b) => b.timestampMs - a.timestampMs);
-  }, [data]);
+  }, [realSessions]);
 
   const batteryOptions = useMemo(() => {
     const byId = new Map();
@@ -116,27 +143,27 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
   }, [records]);
 
   const dateRange = useMemo(() => {
-    const latestRecordTime = records[0]?.timestampMs;
-    const now = Number.isFinite(latestRecordTime) ? latestRecordTime : Date.now();
     if (preset === "custom") {
       const start = customStart ? new Date(customStart).getTime() : null;
       const end = customEnd ? new Date(customEnd).getTime() : null;
       return { start: Number.isFinite(start) ? start : null, end: Number.isFinite(end) ? end : null };
     }
     return null;
-  }, [customEnd, customStart, preset, records]);
+  }, [customEnd, customStart, preset]);
 
   const hasDateFilter = preset !== "NONE";
-  const hasFilters = hasDateFilter;
+  const hasSessionFilter = selectedSessionId !== "ALL";
+  const hasFilters = hasDateFilter || hasSessionFilter;
 
   const filteredRecords = useMemo(() => {
     return records.filter((row) => {
+      if (selectedSessionId !== "ALL" && row.sessionId !== selectedSessionId) return false;
       if (!dateRange) return true;
       if (dateRange.start != null && row.timestampMs < dateRange.start) return false;
       if (dateRange.end != null && row.timestampMs > dateRange.end) return false;
       return true;
     });
-  }, [dateRange, records]);
+  }, [dateRange, records, selectedSessionId]);
 
   const csvRows = useMemo(() => {
     if (hasFilters) return filteredRecords;
@@ -146,6 +173,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
 
   function resetFilters() {
     setPreset("NONE");
+    setSelectedSessionId("ALL");
     setCustomStart("");
     setCustomEnd("");
   }
@@ -160,6 +188,10 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
 
   const activeFilterBadges = useMemo(() => {
     const badges = [];
+    if (selectedSessionId !== "ALL") {
+      const selectedSession = sessionOptions.find((session) => session.sessionId === selectedSessionId);
+      badges.push({ key: "session", label: selectedSession?.label ?? selectedSessionId });
+    }
     if (preset !== "NONE") {
       const presetLabel = PRESETS.find((item) => item.key === preset)?.label ?? preset;
       if (preset === "custom") {
@@ -169,7 +201,12 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
       }
     }
     return badges;
-  }, [preset]);
+  }, [preset, selectedSessionId, sessionOptions]);
+
+  const completedSessionCount = realSessions.length;
+  const visibleSessionCount = useMemo(() => {
+    return new Set(filteredRecords.map((row) => row.sessionId)).size;
+  }, [filteredRecords]);
 
   function exportCsv() {
     const csv = buildCsv(csvRows);
@@ -223,6 +260,9 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
       <HistoryFilters
         preset={preset}
         onPresetChange={setDatePreset}
+        sessionId={selectedSessionId}
+        sessionOptions={sessionOptions}
+        onSessionChange={setSelectedSessionId}
         customStart={customStart}
         customEnd={customEnd}
         onCustomStartChange={(v) => { setPreset("custom"); setCustomStart(v); }}
@@ -242,7 +282,9 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
           <div className="history-results-head">
             <div>
               <h2>Session records</h2>
-              <p className="history-results-sub">Showing all {filteredRecords.length} filtered records</p>
+              <p className="history-results-sub">
+                Showing {filteredRecords.length} telemetry packets from {visibleSessionCount} of {completedSessionCount} completed sessions
+              </p>
             </div>
           </div>
           {filteredRecords.length === 0 ? (

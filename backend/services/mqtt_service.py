@@ -181,7 +181,9 @@ class MqttService:
             for device_id, state in self.devices.items()
         }
         fresh_telemetry = any(
-            state.last_telemetry and self._is_fresh(state.last_telemetry, now)
+            state.last_telemetry
+            and self._is_fresh(state.last_telemetry, now)
+            and str(state.status.get("state", "")).lower() == "running"
             for state in self.devices.values()
         )
         available = any(device["available"] for device in devices.values())

@@ -160,13 +160,19 @@ def telemetry_loop(client: mqtt.Client, topic_prefix: str, device_id: str, batte
     while not stop_requested.is_set():
         now = time.time()
         if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+            if active_session_id and paused:
+                device_state = "paused"
+            elif active_session_id:
+                device_state = "running"
+            else:
+                device_state = "idle"
             publish_json(
                 client,
                 status_topic,
                 {
                     "device_id": device_id,
                     "timestamp": utc_now(),
-                    "state": "running" if active_session_id and not paused else "idle",
+                    "state": device_state,
                     "active_session_id": active_session_id,
                     "profile": active_profile_name,
                 },

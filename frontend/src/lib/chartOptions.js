@@ -11,14 +11,9 @@ export const ALLOWED_CHARTS = {
   voltage: ["line", "area", "scatter"],
   current: ["line", "area", "step"],
   temperature: ["line", "area", "scatter"],
-  soc: ["gauge", "donut"],
-  soh: ["gauge", "donut"],
-  // Prefer gauge and line for SOC and SOH in the UI toggle options
-  // (keep donut available historically but expose line as second option)
-  // Update: replace donut with line to match requested UI
   soc: ["gauge", "line"],
   soh: ["gauge", "line"],
-  power: ["area", "line", "scatter"]
+  power: ["line", "area", "scatter"]
 };
 
 const CHART_META = {

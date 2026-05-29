@@ -64,7 +64,11 @@ async def get_pi_status():
 
 
 @router.get("/telemetry/live")
-async def get_live_telemetry(user_id: str = Query(...)):
+async def get_live_telemetry(user_id: str | None = Query(None), scope: str = Query("user")):
+    if scope == "all":
+        return {"telemetry": firebase.list_live_telemetry(None)}
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required unless scope=all")
     return {"telemetry": firebase.list_live_telemetry(user_id)}
 
 

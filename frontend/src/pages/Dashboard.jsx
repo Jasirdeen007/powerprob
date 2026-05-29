@@ -26,7 +26,7 @@ function isRealPiReading(reading) {
   return [reading.voltage, reading.current, reading.temperature].some((value) => Number(value) !== 0);
 }
 
-function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, profiles = [], onStartSession, onEndSession, onPauseSession, piStatus }) {
+function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, activeSession = {}, profiles = [], onStartSession, onEndSession, onPauseSession, piStatus }) {
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [chargeConfigModalOpen, setChargeConfigModalOpen] = useState(false);
   const [operationMode, setOperationMode] = useState("discharge");
@@ -42,24 +42,45 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
   const [chargeVoltage, setChargeVoltage] = useState("11.1");
   const [chargeCurrent, setChargeCurrent] = useState("2.2");
 
-  const [isRunning, setIsRunning] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [activeSessionId, setActiveSessionId] = useState("");
-  const [activeDeviceId, setActiveDeviceId] = useState("");
   const [sessionPending, setSessionPending] = useState(false);
+  const [pendingAction, setPendingAction] = useState("");
   const [sessionError, setSessionError] = useState("");
   const [batteryName, setBatteryName] = useState("");
   const [chargeModalOpen, setChargeModalOpen] = useState(false);
 
   const piConnected = Boolean(piStatus?.connected);
   const liveReadings = Array.isArray(liveStream) ? liveStream : [];
-  const activeSessionReadings = activeSessionId
-    ? liveReadings.filter((reading) => reading.sessionId === activeSessionId)
+  const activeSessionId = activeSession.sessionId ?? "";
+  const activeDeviceId = activeSession.deviceId ?? "";
+  const isRunning = Boolean(activeSession.isRunning);
+  const isPaused = Boolean(activeSession.isPaused);
+  const activeSessionMap = piStatus?.active_sessions ?? {};
+  const deviceSessionMap = piStatus?.device_sessions ?? {};
+  const deviceEntries = Object.entries(piStatus?.devices ?? {});
+  const reportedSessionIds = [
+    ...Object.keys(activeSessionMap),
+    ...Object.values(deviceSessionMap),
+    ...deviceEntries.map(([, device]) => device?.active_session_id)
+  ].filter(Boolean);
+  const reportedActiveSessions = new Set(reportedSessionIds);
+  const firstReportedSessionId = reportedSessionIds[0] ?? "";
+  const latestLiveSessionId = liveReadings.at(-1)?.sessionId ?? "";
+  const visibleSessionId = activeSessionId || (reportedActiveSessions.has(latestLiveSessionId) ? latestLiveSessionId : firstReportedSessionId);
+  const visibleDeviceId = activeDeviceId || activeSessionMap[visibleSessionId] || Object.entries(deviceSessionMap).find(([, sessionId]) => sessionId === visibleSessionId)?.[0] || "";
+  const visibleDeviceState = piStatus?.devices?.[visibleDeviceId]?.status?.state
+    ?? deviceEntries.find(([, device]) => device?.active_session_id === visibleSessionId)?.[1]?.status?.state
+    ?? "";
+  const isPiPaused = String(visibleDeviceState).toLowerCase() === "paused" || (activeSessionId && isPaused);
+  const isPiBusy = Boolean(visibleSessionId);
+  const ownsVisibleSession = Boolean(activeSessionId && activeSessionId === visibleSessionId);
+  const controlPaused = Boolean(isPaused || (ownsVisibleSession && isPiPaused));
+  const activeSessionReadings = visibleSessionId
+    ? liveReadings.filter((reading) => reading.sessionId === visibleSessionId)
     : [];
   const hasPiTelemetry = Boolean(
-    isRunning &&
-    activeSessionId &&
     piConnected &&
+    visibleSessionId &&
+    !isPiPaused &&
     activeSessionReadings.some(isRealPiReading)
   );
   const fullReadings = hasPiTelemetry ? activeSessionReadings : [ZERO_READING];
@@ -124,9 +145,21 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
   const powerValue = activeLivePoint.voltage * activeLivePoint.current;
   const tone = activeLivePoint.status === "critical" ? "danger" : activeLivePoint.status === "warning" ? "warn" : "good";
   const PiStatusIcon = piConnected ? Wifi : WifiOff;
-  const piStatusLabel = hasPiTelemetry ? "Pi data receiving" : piConnected ? "Pi available" : "Pi unavailable";
+  const piStatusLabel = hasPiTelemetry
+    ? "Pi data receiving"
+    : isPiPaused
+      ? "Pi paused"
+      : isPiBusy
+        ? "Pi in use"
+        : piConnected
+          ? "Pi available"
+          : "Pi unavailable";
   const piStatusDetail = hasPiTelemetry
     ? "Live telemetry is updating the dashboard"
+    : isPiPaused
+      ? "Telemetry is paused for the active session"
+      : isPiBusy
+        ? `Session ${visibleSessionId} is using ${visibleDeviceId || "the Pi"}`
     : piConnected
       ? "Pi is connected, waiting for telemetry packets"
       : "Waiting for Raspberry Pi telemetry bridge";
@@ -164,6 +197,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
   const handleRun = async () => {
     setSessionError("");
     setSessionPending(true);
+    setPendingAction("start");
     try {
       const response = await onStartSession?.({
         battery_id: activeBattery || selectedSession?.batteryId || "B0047",
@@ -171,47 +205,46 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
         config: buildSessionConfig()
       });
 
-      setActiveSessionId(response?.session_id ?? "");
-      setActiveDeviceId(response?.device_id ?? "");
-      setIsRunning(true);
-      setIsPaused(false);
+      if (!response?.session_id) {
+        throw new Error("Backend did not return a session id.");
+      }
     } catch (error) {
       setSessionError(error instanceof Error ? error.message : "Could not start session.");
     } finally {
       setSessionPending(false);
+      setPendingAction("");
     }
   };
 
   const handlePause = async () => {
     if (!activeSessionId) return;
-    const nextPaused = !isPaused;
+    const nextPaused = !controlPaused;
     setSessionError("");
     setSessionPending(true);
+    setPendingAction(nextPaused ? "pause" : "resume");
     try {
       await onPauseSession?.(activeSessionId, nextPaused, activeDeviceId);
-      setIsPaused(nextPaused);
     } catch (error) {
       setSessionError(error instanceof Error ? error.message : "Could not pause session.");
     } finally {
       setSessionPending(false);
+      setPendingAction("");
     }
   };
 
   const handleStop = async () => {
     setSessionError("");
     setSessionPending(true);
+    setPendingAction("stop");
     try {
       if (activeSessionId) {
         await onEndSession?.(activeSessionId);
       }
-      setActiveSessionId("");
-      setActiveDeviceId("");
-      setIsRunning(false);
-      setIsPaused(false);
     } catch (error) {
       setSessionError(error instanceof Error ? error.message : "Could not end session.");
     } finally {
       setSessionPending(false);
+      setPendingAction("");
     }
   };
 
@@ -238,33 +271,33 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
           </button>
 
           <button
-            className={`btn-run ${isRunning && !isPaused ? "active" : ""}`}
+            className={`btn-run ${isRunning && !controlPaused ? "active" : ""}`}
             onClick={handleRun}
-            disabled={sessionPending}
+            disabled={sessionPending || Boolean(activeSessionId) || isPiBusy}
             type="button"
           >
             <Play size={16} fill="currentColor" />
-            {sessionPending ? "Starting..." : "Run"}
+            {pendingAction === "start" ? "Starting..." : isPiBusy && !ownsVisibleSession ? "Pi busy" : "Run"}
           </button>
 
           <button
-            className={`btn-pause ${isPaused ? "active" : ""}`}
+            className={`btn-pause ${controlPaused ? "active" : ""}`}
             onClick={handlePause}
-            disabled={sessionPending || !activeSessionId}
+            disabled={sessionPending || !ownsVisibleSession}
             type="button"
           >
             <Pause size={16} />
-            Pause
+            {pendingAction === "pause" ? "Pausing..." : pendingAction === "resume" ? "Resuming..." : controlPaused ? "Resume" : "Pause"}
           </button>
 
           <button
             className="btn-stop"
             onClick={handleStop}
-            disabled={sessionPending || (!isRunning && !activeSessionId)}
+            disabled={sessionPending || !ownsVisibleSession}
             type="button"
           >
             <Square size={16} fill="currentColor" />
-            Stop
+            {pendingAction === "stop" ? "Stopping..." : "Stop"}
           </button>
         </div>
       </div>
@@ -275,9 +308,9 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
         </div>
       )}
 
-      {activeSessionId && (
+      {visibleSessionId && (
         <div className="session-info">
-          <p>Active session: <strong>{activeSessionId}</strong></p>
+          <p>{ownsVisibleSession ? "Active session" : "Pi in use"}: <strong>{visibleSessionId}</strong></p>
         </div>
       )}
 
