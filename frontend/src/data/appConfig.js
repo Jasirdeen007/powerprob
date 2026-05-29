@@ -5,6 +5,7 @@ export const statusLabel = {
 };
 
 export const appUser = {
+  uid: "local-demo-user",
   name: "Battery Test User",
   role: "User",
   access: ["dashboard", "traceability"]

@@ -40,14 +40,16 @@ function getFirebaseAuth() {
   return app ? getAuth(app) : null;
 }
 
-async function readTestSessions(db) {
-  const backendSessionsSnapshot = await getDocs(collection(db, "sessions"));
+async function readTestSessions(db, userId) {
+  const backendSessionsSnapshot = userId
+    ? await getDocs(collection(db, "users", userId, "sessions"))
+    : { empty: true, docs: [] };
   if (!backendSessionsSnapshot.empty) {
     const sessions = await Promise.all(
       backendSessionsSnapshot.docs.map(async (sessionDoc) => {
         const session = sessionDoc.data();
         if (session.status !== "completed") return null;
-        const telemetrySnapshot = await getDocs(collection(db, "sessions", sessionDoc.id, "telemetry"));
+        const telemetrySnapshot = await getDocs(collection(db, "users", userId, "sessions", sessionDoc.id, "telemetry"));
         const readings = telemetrySnapshot.docs
           .map((readingDoc) => backendTelemetryToReading(readingDoc.data(), session.started_at))
           .filter(Boolean)
@@ -86,7 +88,7 @@ async function readTestSessions(db) {
   return sessions;
 }
 
-function backendTelemetryToReading(packet, startedAt) {
+export function backendTelemetryToReading(packet, startedAt) {
   const timestampMs = new Date(packet.timestamp).getTime();
   const startedMs = new Date(startedAt ?? packet.timestamp).getTime();
   if (!Number.isFinite(timestampMs)) return null;
@@ -109,26 +111,40 @@ function inferBatteryId(sessionId) {
   return parts.at(-1) || "B0047";
 }
 
-function backendTelemetryToLiveReadings(telemetryBySession) {
+export function backendTelemetryToLiveReadings(telemetryBySession) {
   return Object.fromEntries(
     Object.entries(telemetryBySession ?? {}).flatMap(([sessionId, value]) => {
       const packet = value?.latest ?? value;
       if (!packet || typeof packet !== "object") return [];
 
-      const batteryId = inferBatteryId(packet.session_id ?? sessionId);
-      const reading = backendTelemetryToReading(packet, packet.timestamp);
-      if (!reading) return [];
+      const rawPackets = value?.packets && typeof value.packets === "object"
+        ? Object.values(value.packets)
+        : [packet];
+      const sortedPackets = rawPackets
+        .filter((item) => item && typeof item === "object" && item.timestamp)
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      const startedAt = sortedPackets[0]?.timestamp ?? packet.timestamp;
+      const stream = sortedPackets
+        .map((item) => {
+          const reading = backendTelemetryToReading(item, startedAt);
+          return reading ? { ...reading, sessionId: item.session_id ?? sessionId } : null;
+        })
+        .filter(Boolean);
+      if (stream.length === 0) return [];
+
+      const batteryId = packet.battery_id ?? inferBatteryId(packet.session_id ?? sessionId);
 
       return [
         [
           batteryId,
           {
             batteryId,
+            batteryName: packet.battery_name ?? "",
             sessionId: packet.session_id ?? sessionId,
             mode: packet.mode ?? "DISCHARGE",
             status: packet.alerts?.length ? "warning" : "healthy",
             soh: Number(packet.derived?.soh ?? 100),
-            stream: [reading]
+            stream
           }
         ]
       ];
@@ -136,7 +152,7 @@ function backendTelemetryToLiveReadings(telemetryBySession) {
   );
 }
 
-export async function loadFirebaseData() {
+export async function loadFirebaseData(userId) {
   const app = getFirebaseApp();
   if (!app) return null;
 
@@ -145,8 +161,8 @@ export async function loadFirebaseData() {
 
   const [batteriesSnapshot, testSessions, backendTelemetrySnapshot] = await Promise.all([
     getDocs(collection(db, "batteries")),
-    readTestSessions(db),
-    get(ref(rtdb, "telemetry"))
+    readTestSessions(db, userId),
+    userId ? get(ref(rtdb, `users/${userId}/telemetry`)) : Promise.resolve({ exists: () => false })
   ]);
 
   const batteries = batteriesSnapshot.docs.map((batteryDoc) => ({
@@ -166,12 +182,12 @@ export async function loadFirebaseData() {
   };
 }
 
-export function subscribeLiveReadings(onLiveReadings) {
+export function subscribeLiveReadings(userId, onLiveReadings) {
   const app = getFirebaseApp();
-  if (!app) return undefined;
+  if (!app || !userId) return undefined;
 
   const rtdb = getDatabase(app);
-  return onValue(ref(rtdb, "telemetry"), (snapshot) => {
+  return onValue(ref(rtdb, `users/${userId}/telemetry`), (snapshot) => {
     onLiveReadings(backendTelemetryToLiveReadings(snapshot.val() ?? {}));
   });
 }

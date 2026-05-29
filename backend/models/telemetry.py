@@ -24,6 +24,7 @@ class DerivedMetrics(BaseModel):
 
 class TelemetryPacket(BaseModel):
     session_id: str = Field(..., min_length=1)
+    user_id: str | None = None
     battery_id: str | None = None
     battery_name: str | None = None
     timestamp: datetime

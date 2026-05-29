@@ -2,6 +2,15 @@ import { VARIABLES } from "./chartEngine";
 
 const ZERO_BASED_METRICS = new Set(["current", "power", "soc", "soh"]);
 
+const DYNAMIC_MIN_SPANS = {
+  voltage: 1.0,
+  current: 1.0,
+  power: 5.0,
+  temperature: 3.0
+};
+
+const DYNAMIC_PADDING_RATIO = 0.35;
+
 const CHARGE_RANGES = {
   voltage: { min: 0, max: 60, pad: 0.05 },
   current: { min: 0, max: 50, pad: 0.1 },
@@ -49,6 +58,36 @@ export function getFixedMetricYDomain(metricKey, operationMode = "discharge") {
   const domain = resolveFixedRange(metricKey, operationMode);
   if (domain) return domain;
   return [0, 1];
+}
+
+export function getDynamicMetricYDomain(metricKey, values, operationMode = "discharge") {
+  if (metricKey === "soc" || metricKey === "soh") {
+    return [0, 100];
+  }
+
+  const finite = values.map(Number).filter(Number.isFinite);
+  if (finite.length === 0) return getFixedMetricYDomain(metricKey, operationMode);
+
+  const dataMin = Math.min(...finite);
+  const dataMax = Math.max(...finite);
+  const minSpan = DYNAMIC_MIN_SPANS[metricKey] ?? 1;
+  if (dataMin === 0 && dataMax === 0) {
+    return [0, minSpan];
+  }
+  const span = Math.max(dataMax - dataMin, Math.abs(dataMax) * 0.12, minSpan);
+  let min = dataMin - span * DYNAMIC_PADDING_RATIO;
+  let max = dataMax + span * DYNAMIC_PADDING_RATIO;
+
+  if (metricKey === "current" || metricKey === "power") {
+    min = Math.max(0, min);
+  }
+
+  if (min >= max) {
+    min = dataMin - span / 2;
+    max = dataMax + span / 2;
+  }
+
+  return [min, max];
 }
 
 /** @deprecated Use getFixedMetricYDomain for chart rendering. Kept for compatibility. */

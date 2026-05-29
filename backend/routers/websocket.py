@@ -1,8 +1,9 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 import logging
 
 from models.command import CommandPayload
 from models.telemetry import TelemetryPacket, WebSocketMessage
+from services import firebase
 from services.mqtt_service import mqtt_service
 from services.telemetry import parse_json_maybe_string, process_telemetry
 from services.websocket_manager import pi_ws_manager
@@ -35,10 +36,20 @@ async def receive_telemetry(packet: TelemetryPacket):
 
 @router.post("/pi/command")
 async def send_pi_command(command: CommandPayload):
-    payload = command.model_dump()
-    sent = mqtt_service.publish_command(command.session_id, payload)
+    payload = command.model_dump(exclude_none=True)
+    sent = mqtt_service.publish_command(command.session_id, payload, device_id=command.device_id)
     if not sent:
         sent = await pi_ws_manager.send_command(payload)
+    if not sent:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Command was not sent to the Raspberry Pi.",
+                "session_id": command.session_id,
+                "device_id": command.device_id,
+                "hint": "Check /pi/status, Pi service logs, and MQTT broker connectivity.",
+            },
+        )
     return {"sent": sent, "command": payload}
 
 
@@ -50,6 +61,16 @@ async def get_pi_status():
         if websocket_status.get("connected"):
             return websocket_status
     return status
+
+
+@router.get("/telemetry/live")
+async def get_live_telemetry(user_id: str = Query(...)):
+    return {"telemetry": firebase.list_live_telemetry(user_id)}
+
+
+@router.get("/firebase/status")
+async def get_firebase_status():
+    return firebase.get_diagnostics()
 
 
 @router.websocket("/ws/pi")

@@ -46,6 +46,7 @@ def test_profiles_ok():
 def test_session_start_valid_and_invalid():
     valid = {
         "battery_id": "B0047",
+        "user_id": "test-user",
         "config": {
             "chemistry": "Li-ion",
             "cell_count": 3,
@@ -68,7 +69,7 @@ def test_session_start_valid_and_invalid():
 
 
 def test_session_end_valid_and_invalid():
-    status, body = request("POST", "/session/end", {"session_id": "SESSION_TEST"})
+    status, body = request("POST", "/session/end", {"session_id": "SESSION_TEST", "user_id": "test-user"})
     assert status == 200
     assert body["status"] == "completed"
 
@@ -77,13 +78,13 @@ def test_session_end_valid_and_invalid():
 
 
 def test_sessions_ok():
-    status, body = request("GET", "/sessions")
+    status, body = request("GET", "/sessions?user_id=test-user")
     assert status == 200
     assert "sessions" in body
 
 
 def test_historical_valid_and_invalid():
-    status, body = request("GET", "/historical?session_id=SESSION_TEST")
+    status, body = request("GET", "/historical?session_id=SESSION_TEST&user_id=test-user")
     assert status == 200
     assert "packets" in body
 
@@ -94,6 +95,7 @@ def test_historical_valid_and_invalid():
 def test_telemetry_valid_and_invalid():
     valid = {
         "session_id": "SESSION_TEST_B0047",
+        "user_id": "test-user",
         "battery_id": "B0047",
         "timestamp": "2026-05-18T10:15:32",
         "mode": "DISCHARGE",

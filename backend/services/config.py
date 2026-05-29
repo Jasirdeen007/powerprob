@@ -16,7 +16,9 @@ class Settings:
     mqtt_password: str | None = os.getenv("MQTT_PASSWORD")
     mqtt_client_id: str = os.getenv("MQTT_CLIENT_ID", "powerprobe-backend")
     mqtt_default_device_id: str = os.getenv("MQTT_DEFAULT_DEVICE_ID", "pi-001")
+    mqtt_topic_prefix: str = os.getenv("MQTT_TOPIC_PREFIX", "powerprobe/team6").strip("/")
     mqtt_heartbeat_stale_seconds: int = int(os.getenv("MQTT_HEARTBEAT_STALE_SECONDS", "45"))
+    mqtt_prefer_ipv4: bool = os.getenv("MQTT_PREFER_IPV4", "false").strip().lower() in {"1", "true", "yes", "on"}
     allow_origins: list[str] = [
         origin.strip()
         for origin in os.getenv(

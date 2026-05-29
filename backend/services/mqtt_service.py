@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import socket
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -39,6 +40,8 @@ class MqttService:
         self.devices: dict[str, DeviceState] = {}
         self.session_devices: dict[str, str] = {}
         self.device_sessions: dict[str, str] = {}
+        self.broker_host = settings.mqtt_host
+        self.topic_prefix = settings.mqtt_topic_prefix
 
     def start(self) -> None:
         if mqtt is None:
@@ -53,9 +56,15 @@ class MqttService:
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
-        self.client.connect_async(settings.mqtt_host, settings.mqtt_port, keepalive=30)
+        self.broker_host = self._resolve_broker_host(settings.mqtt_host)
+        self.client.connect_async(self.broker_host, settings.mqtt_port, keepalive=30)
         self.client.loop_start()
-        logger.info("MQTT bridge connecting to %s:%s", settings.mqtt_host, settings.mqtt_port)
+        logger.info(
+            "MQTT bridge connecting to %s:%s configured_host=%s",
+            self.broker_host,
+            settings.mqtt_port,
+            settings.mqtt_host,
+        )
 
     def stop(self) -> None:
         if not self.client:
@@ -70,9 +79,9 @@ class MqttService:
         if not self.connected:
             logger.warning("MQTT connect failed rc=%s", rc)
             return
-        client.subscribe("powerprobe/+/telemetry")
-        client.subscribe("powerprobe/+/status")
-        logger.info("MQTT bridge connected and subscribed to telemetry/status topics")
+        client.subscribe(f"{self.topic_prefix}/+/telemetry")
+        client.subscribe(f"{self.topic_prefix}/+/status")
+        logger.info("MQTT bridge connected and subscribed under %s", self.topic_prefix)
 
     def _on_disconnect(self, client, userdata, rc) -> None:
         self.connected = False
@@ -80,10 +89,10 @@ class MqttService:
 
     def _on_message(self, client, userdata, message) -> None:
         try:
-            parts = message.topic.split("/")
-            if len(parts) != 3 or parts[0] != "powerprobe":
+            parsed = self._parse_topic(message.topic)
+            if not parsed:
                 return
-            device_id, kind = parts[1], parts[2]
+            device_id, kind = parsed
             payload = json.loads(message.payload.decode("utf-8") or "{}")
             if kind == "status":
                 self.record_status(device_id, payload)
@@ -153,7 +162,7 @@ class MqttService:
         if not self.client or not self.connected:
             return False
         resolved_device_id = device_id or self.session_devices.get(session_id) or self.find_available_device_id()
-        topic = f"powerprobe/{resolved_device_id}/command"
+        topic = f"{self.topic_prefix}/{resolved_device_id}/command"
         result = self.client.publish(topic, json.dumps(command), qos=1)
         return result.rc == mqtt.MQTT_ERR_SUCCESS
 
@@ -182,10 +191,39 @@ class MqttService:
             "telemetry_active": fresh_telemetry,
             "transport": "mqtt",
             "broker": f"{settings.mqtt_host}:{settings.mqtt_port}",
+            "broker_resolved": f"{self.broker_host}:{settings.mqtt_port}",
+            "topic_prefix": self.topic_prefix,
             "devices": devices,
             "active_sessions": self.session_devices,
             "device_sessions": self.device_sessions,
         }
+
+    def _resolve_broker_host(self, host: str) -> str:
+        if not settings.mqtt_prefer_ipv4:
+            return host
+        try:
+            infos = socket.getaddrinfo(host, settings.mqtt_port, socket.AF_INET, socket.SOCK_STREAM)
+        except OSError as error:
+            logger.warning("Could not resolve MQTT host %s to IPv4: %s", host, error)
+            return host
+
+        for info in infos:
+            address = info[4][0]
+            if address:
+                return address
+        return host
+
+    def _parse_topic(self, topic: str) -> tuple[str, str] | None:
+        prefix_parts = self.topic_prefix.split("/")
+        parts = topic.split("/")
+        if len(parts) != len(prefix_parts) + 2:
+            return None
+        if parts[: len(prefix_parts)] != prefix_parts:
+            return None
+        device_id, kind = parts[-2], parts[-1]
+        if kind not in {"status", "telemetry"}:
+            return None
+        return device_id, kind
 
     def _is_fresh(self, timestamp: float | None, now: float | None = None) -> bool:
         if timestamp is None:

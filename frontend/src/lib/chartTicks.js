@@ -1,7 +1,7 @@
 /** Shared tick, domain, and scroll helpers for all Recharts telemetry views. */
 
 export const DEFAULT_VISIBLE_SECONDS = 60;
-export const PIXELS_PER_SECOND = 12;
+export const PIXELS_PER_SECOND = 18;
 export const MIN_CHART_SCROLL_WIDTH = 560;
 export const DEFAULT_Y_TICK_COUNT = 5;
 
@@ -111,13 +111,29 @@ export function toYDomain(domain) {
   return [Number(min), Number(max)];
 }
 
-/** Every integer second from min through max inclusive (0, 1, 2, …). */
-export function buildTimeTicks(min, max) {
+function niceTimeStep(roughStep) {
+  if (roughStep <= 1) return 1;
+  if (roughStep <= 2) return 2;
+  if (roughStep <= 5) return 5;
+  if (roughStep <= 10) return 10;
+  if (roughStep <= 15) return 15;
+  if (roughStep <= 30) return 30;
+  return Math.ceil(roughStep / 60) * 60;
+}
+
+/** Readable integer-second ticks across the visible time span. */
+export function buildTimeTicks(min, max, maxTicks = 12) {
   const lo = Math.floor(min);
   const hi = Math.ceil(max);
   if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi < lo) return [0];
+  const step = niceTimeStep((hi - lo) / Math.max(1, maxTicks - 1));
+  const start = Math.ceil(lo / step) * step;
   const ticks = [];
-  for (let t = lo; t <= hi; t += 1) ticks.push(t);
+  if (lo === 0) ticks.push(0);
+  for (let t = start; t <= hi; t += step) {
+    if (!ticks.includes(t)) ticks.push(t);
+  }
+  if (!ticks.includes(hi)) ticks.push(hi);
   return ticks;
 }
 
@@ -142,8 +158,10 @@ export function getTimeAxisExtent(timeValues, visibleSeconds = DEFAULT_VISIBLE_S
     };
   }
 
-  const domainMin = Math.floor(Math.min(...timeValues));
-  const domainMax = Math.max(Math.ceil(Math.max(...timeValues)), domainMin + 1);
+  const dataMin = Math.floor(Math.min(...timeValues));
+  const dataMax = Math.ceil(Math.max(...timeValues));
+  const domainMin = Math.min(0, dataMin);
+  const domainMax = Math.max(dataMax, domainMin + Math.max(1, visibleSeconds) - 1);
   const span = domainMax - domainMin + 1;
 
   return {
@@ -259,6 +277,13 @@ export function scrollChartToEnd(scrollEl) {
     return;
   }
   scrollEl.scrollLeft = scrollEl.scrollWidth - scrollEl.clientWidth;
+}
+
+export function isScrolledNearEnd(scrollEl, thresholdPx = 24) {
+  if (!scrollEl) return true;
+  if (scrollEl.scrollWidth <= scrollEl.clientWidth) return true;
+  const distanceFromEnd = scrollEl.scrollWidth - scrollEl.clientWidth - scrollEl.scrollLeft;
+  return distanceFromEnd <= thresholdPx;
 }
 
 function dedupeTicks(ticks) {

@@ -45,6 +45,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState("");
+  const [activeDeviceId, setActiveDeviceId] = useState("");
   const [sessionPending, setSessionPending] = useState(false);
   const [sessionError, setSessionError] = useState("");
   const [batteryName, setBatteryName] = useState("");
@@ -52,8 +53,16 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
 
   const piConnected = Boolean(piStatus?.connected);
   const liveReadings = Array.isArray(liveStream) ? liveStream : [];
-  const hasPiTelemetry = piConnected && liveReadings.some(isRealPiReading);
-  const fullReadings = hasPiTelemetry ? liveReadings : [ZERO_READING];
+  const activeSessionReadings = activeSessionId
+    ? liveReadings.filter((reading) => reading.sessionId === activeSessionId)
+    : [];
+  const hasPiTelemetry = Boolean(
+    isRunning &&
+    activeSessionId &&
+    piConnected &&
+    activeSessionReadings.some(isRealPiReading)
+  );
+  const fullReadings = hasPiTelemetry ? activeSessionReadings : [ZERO_READING];
 
   const profileSpecs = {
     "Surveillance Drone": { cRating: "10", batteryType: "Li-ion", mah: "4500", numCells: "4", voltage: "14.8" },
@@ -158,10 +167,12 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
     try {
       const response = await onStartSession?.({
         battery_id: activeBattery || selectedSession?.batteryId || "B0047",
+        battery_name: batteryName,
         config: buildSessionConfig()
       });
 
       setActiveSessionId(response?.session_id ?? "");
+      setActiveDeviceId(response?.device_id ?? "");
       setIsRunning(true);
       setIsPaused(false);
     } catch (error) {
@@ -177,7 +188,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
     setSessionError("");
     setSessionPending(true);
     try {
-      await onPauseSession?.(activeSessionId, nextPaused);
+      await onPauseSession?.(activeSessionId, nextPaused, activeDeviceId);
       setIsPaused(nextPaused);
     } catch (error) {
       setSessionError(error instanceof Error ? error.message : "Could not pause session.");
@@ -194,6 +205,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, prof
         await onEndSession?.(activeSessionId);
       }
       setActiveSessionId("");
+      setActiveDeviceId("");
       setIsRunning(false);
       setIsPaused(false);
     } catch (error) {

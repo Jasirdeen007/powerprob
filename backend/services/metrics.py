@@ -72,7 +72,8 @@ def estimate_soh(state: SessionMetricState, cycle_capacity_ah: float, rated_capa
         return 100.0
 
     previous_measured = state.measured_capacity_ah or rated_capacity_ah
-    if cycle_capacity_ah > 0:
+    minimum_meaningful_capacity = rated_capacity_ah * 0.2
+    if cycle_capacity_ah >= minimum_meaningful_capacity:
         state.measured_capacity_ah = (0.2 * cycle_capacity_ah) + (0.8 * previous_measured)
     else:
         state.measured_capacity_ah = previous_measured

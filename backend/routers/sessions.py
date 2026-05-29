@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from models.session import SessionEndRequest, SessionStartRequest
 from services.sessions import end_session, list_all_sessions, start_session
@@ -17,5 +17,5 @@ async def complete_session(request: SessionEndRequest):
 
 
 @router.get("/sessions")
-def get_sessions():
-    return {"sessions": list_all_sessions()}
+def get_sessions(user_id: str = Query(...)):
+    return {"sessions": list_all_sessions(user_id)}

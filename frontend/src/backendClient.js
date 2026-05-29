@@ -10,7 +10,14 @@ async function request(path, options = {}) {
   });
 
   if (!response.ok) {
-    const message = await response.text();
+    const text = await response.text();
+    let message = text;
+    try {
+      const parsed = JSON.parse(text);
+      message = parsed?.detail?.message ?? parsed?.detail ?? text;
+    } catch {
+      // Keep raw text when the backend did not return JSON.
+    }
     throw new Error(message || `Backend request failed: ${response.status}`);
   }
 
@@ -21,8 +28,9 @@ export function getProfiles() {
   return request("/profiles");
 }
 
-export function getSessions() {
-  return request("/sessions");
+export function getSessions(userId) {
+  const params = new URLSearchParams({ user_id: userId });
+  return request(`/sessions?${params.toString()}`);
 }
 
 export function startSession(payload) {
@@ -32,19 +40,20 @@ export function startSession(payload) {
   });
 }
 
-export function endSession(sessionId) {
+export function endSession(sessionId, userId) {
   return request("/session/end", {
     method: "POST",
-    body: JSON.stringify({ session_id: sessionId })
+    body: JSON.stringify({ session_id: sessionId, user_id: userId })
   });
 }
 
-export function sendPiCommand({ type, sessionId, command = {} }) {
+export function sendPiCommand({ type, sessionId, deviceId, command = {} }) {
   return request("/pi/command", {
     method: "POST",
     body: JSON.stringify({
       type,
       session_id: sessionId,
+      device_id: deviceId,
       command
     })
   });
@@ -54,8 +63,13 @@ export function getPiStatus() {
   return request("/pi/status");
 }
 
-export function getHistorical(sessionId, { from, to } = {}) {
-  const params = new URLSearchParams({ session_id: sessionId });
+export function getLiveTelemetry(userId) {
+  const params = new URLSearchParams({ user_id: userId });
+  return request(`/telemetry/live?${params.toString()}`);
+}
+
+export function getHistorical(sessionId, { from, to, userId } = {}) {
+  const params = new URLSearchParams({ session_id: sessionId, user_id: userId });
   if (from) params.set("from", from);
   if (to) params.set("to", to);
   return request(`/historical?${params.toString()}`);

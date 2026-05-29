@@ -18,7 +18,7 @@ import {
   CartesianGrid
 } from "recharts";
 import { Download } from "lucide-react";
-import { getFixedMetricYDomain } from "../lib/chartDomains";
+import { getDynamicMetricYDomain } from "../lib/chartDomains";
 import { buildAxisLabel } from "../lib/chartEngine";
 import { getChartOptionsForMetric, getDefaultChartType } from "../lib/chartOptions";
 import {
@@ -29,6 +29,7 @@ import {
   formatValueTick,
   getEvenTicksWithDomain,
   getTimeAxisExtent,
+  isScrolledNearEnd,
   scrollChartToEnd,
   SERIES_CLIP_PROPS,
   toYDomain,
@@ -119,6 +120,7 @@ function TelemetryChartCard({
 }) {
   const chartRef = useRef(null);
   const scrollRef = useRef(null);
+  const followLatestRef = useRef(true);
   const options = useMemo(() => getChartOptionsForMetric(metricKey), [metricKey]);
   const defaultType = useMemo(() => getDefaultChartType(metricKey), [metricKey]);
   const [activeChart, setActiveChart] = useState(defaultType);
@@ -145,8 +147,8 @@ function TelemetryChartCard({
 
   const yDomain = useMemo(() => {
     if (forceYRange) return [forceYRange.min, forceYRange.max];
-    return getFixedMetricYDomain(metricKey, operationMode);
-  }, [forceYRange, metricKey, operationMode]);
+    return getDynamicMetricYDomain(metricKey, processedData.map((row) => row[metricKey]), operationMode);
+  }, [forceYRange, metricKey, operationMode, processedData]);
 
   const yDomainStrict = useMemo(() => toYDomain(yDomain), [yDomain]);
   const yTickInfo = useMemo(
@@ -159,8 +161,14 @@ function TelemetryChartCard({
   const formatTick = (v) => formatValueTick(metricKey, v);
 
   useEffect(() => {
-    scrollChartToEnd(scrollRef.current);
+    if (followLatestRef.current) {
+      scrollChartToEnd(scrollRef.current);
+    }
   }, [domainMax, processedData.length, timeSeriesWidth]);
+
+  function handleChartScroll(event) {
+    followLatestRef.current = isScrolledNearEnd(event.currentTarget);
+  }
 
   function handleDownloadPng() {
     downloadSvgChartPng(chartRef.current, `${metricKey}_chart_${timestampForFile()}.png`);
@@ -349,7 +357,7 @@ function TelemetryChartCard({
         </div>
       </div>
       <div className="chart-plot-area">
-        <div className="chart-scroll" ref={scrollRef}>
+        <div className="chart-scroll" ref={scrollRef} onScroll={handleChartScroll}>
           <div
             className="chart-container"
             ref={chartRef}

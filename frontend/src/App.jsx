@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Header from "./components/Header";
-import { endSession, getPiStatus, getProfiles, getSessions, sendPiCommand, startSession } from "./backendClient";
+import { endSession, getHistorical, getLiveTelemetry, getPiStatus, getProfiles, getSessions, sendPiCommand, startSession } from "./backendClient";
 import { appUser } from "./data/appConfig";
 import {
   authEnabled,
@@ -10,7 +10,9 @@ import {
   signInFirebaseAccount,
   signOutFirebaseAccount,
   subscribeAuthState,
-  subscribeLiveReadings
+  subscribeLiveReadings,
+  backendTelemetryToLiveReadings,
+  backendTelemetryToReading
 } from "./firebaseClient";
 import localDemoData from "./demo-data.json";
 import Dashboard from "./pages/Dashboard";
@@ -41,6 +43,27 @@ function makeStaticInitialData() {
   };
 }
 
+function makeZeroLiveReading(batteryId) {
+  return {
+    batteryId,
+    mode: "IDLE",
+    status: "healthy",
+    soh: 100,
+    stream: [
+      {
+        time: 0,
+        voltage: 0,
+        current: 0,
+        temperature: 0,
+        soc: 0,
+        soh: 0,
+        power: 0,
+        status: "healthy"
+      }
+    ]
+  };
+}
+
 function mergeLiveReadings(currentLiveReadings, incomingLiveReadings) {
   if (!incomingLiveReadings || Object.keys(incomingLiveReadings).length === 0) {
     return currentLiveReadings;
@@ -49,25 +72,29 @@ function mergeLiveReadings(currentLiveReadings, incomingLiveReadings) {
   const merged = { ...(currentLiveReadings ?? {}) };
   for (const [batteryId, incoming] of Object.entries(incomingLiveReadings)) {
     const current = merged[batteryId];
-    const incomingPoint = incoming.stream?.at(-1);
+    const incomingPoints = Array.isArray(incoming.stream) ? incoming.stream : [];
     const currentStream = current?.stream ?? [];
-    const lastPoint = currentStream.at(-1);
-    const isDuplicate = incomingPoint && lastPoint && (
-      incomingPoint.timestamp === lastPoint.timestamp ||
-      (
-        incomingPoint.time === lastPoint.time &&
-        incomingPoint.voltage === lastPoint.voltage &&
-        incomingPoint.current === lastPoint.current &&
-        incomingPoint.temperature === lastPoint.temperature
-      )
-    );
+    const existingKeys = new Set(currentStream.map((point) => (
+      point.timestamp ?? `${point.time}-${point.voltage}-${point.current}-${point.temperature}`
+    )));
+    const newPoints = incomingPoints.filter((point) => {
+      const key = point.timestamp ?? `${point.time}-${point.voltage}-${point.current}-${point.temperature}`;
+      if (existingKeys.has(key)) return false;
+      existingKeys.add(key);
+      return true;
+    });
 
     merged[batteryId] = {
       ...current,
       ...incoming,
-      stream: incomingPoint && !isDuplicate
-        ? [...currentStream, incomingPoint].slice(-300)
-        : currentStream.length > 0 ? currentStream : incoming.stream ?? []
+      stream: [...currentStream, ...newPoints]
+        .sort((a, b) => {
+          const aTime = new Date(a.timestamp ?? 0).getTime();
+          const bTime = new Date(b.timestamp ?? 0).getTime();
+          if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) return aTime - bTime;
+          return Number(a.time ?? 0) - Number(b.time ?? 0);
+        })
+        .slice(-300)
     };
   }
   return merged;
@@ -155,6 +182,7 @@ function App() {
     transport: "websocket",
     endpoint: "/ws/pi"
   });
+  const userId = currentUser?.uid || appUser.uid;
 
   useEffect(() => {
     if (theme === "dark") {
@@ -175,7 +203,7 @@ function App() {
         const timeout = new Promise((_, reject) => {
           timeoutId = window.setTimeout(() => reject(new Error("Firebase data load timed out.")), 2500);
         });
-        const payload = await Promise.race([loadFirebaseData(), timeout]);
+        const payload = await Promise.race([loadFirebaseData(userId), timeout]);
         if (cancelled || !payload) return;
         setData((current) => ({
           ...current,
@@ -214,7 +242,7 @@ function App() {
       try {
         const [profilesPayload, sessionsPayload] = await Promise.all([
           getProfiles(),
-          getSessions()
+          getSessions(userId)
         ]);
 
         if (cancelled) return;
@@ -270,12 +298,45 @@ function App() {
     }
 
     refreshPiStatus();
-    const intervalId = window.setInterval(refreshPiStatus, 15000);
+    const intervalId = window.setInterval(refreshPiStatus, 5000);
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [userId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshBackendLiveTelemetry() {
+      try {
+        const payload = await getLiveTelemetry(userId);
+        const liveReadings = backendTelemetryToLiveReadings(payload.telemetry ?? {});
+        if (cancelled || Object.keys(liveReadings).length === 0) return;
+        setData((current) => {
+          if (!current) return current;
+          const firstIncomingBattery = Object.keys(liveReadings)[0];
+          if (firstIncomingBattery) {
+            setDashboardBattery(firstIncomingBattery);
+          }
+          return {
+            ...current,
+            liveReadings: mergeLiveReadings(current.liveReadings, liveReadings),
+            testSessions: appendLiveReadingsToSessions(current.testSessions ?? [], liveReadings)
+          };
+        });
+      } catch (error) {
+        // Firebase remains the primary live source; this backend poll is a dev fallback.
+      }
+    }
+
+    refreshBackendLiveTelemetry();
+    const intervalId = window.setInterval(refreshBackendLiveTelemetry, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (!authEnabled) return undefined;
@@ -283,6 +344,7 @@ function App() {
       if (!user) return;
       setCurrentUser({
         ...appUser,
+        uid: user.uid,
         name: user.displayName || user.email?.split("@")[0] || appUser.name,
         email: user.email ?? "",
         role: appUser.role
@@ -290,7 +352,7 @@ function App() {
       setAuthView("app");
       setActivePage("dashboard");
     });
-  }, []);
+  }, [userId]);
 
   const defaultLiveBattery = useMemo(() => {
     if (!data) return "B0047";
@@ -305,7 +367,7 @@ function App() {
 
   useEffect(() => {
     if (!firebaseEnabled || !firebaseReady) return undefined;
-    return subscribeLiveReadings((liveReadings) => {
+    return subscribeLiveReadings(userId, (liveReadings) => {
       setData((current) => {
         if (!current) return current;
         const nextLiveReadings = mergeLiveReadings(current.liveReadings, liveReadings);
@@ -320,7 +382,7 @@ function App() {
         };
       });
     });
-  }, [firebaseReady]);
+  }, [firebaseReady, userId]);
 
   async function handleAuthSubmit(userDetails) {
     setAuthError("");
@@ -334,6 +396,7 @@ function App() {
           const user = await createFirebaseAccount(userDetails);
           setCurrentUser({
             ...appUser,
+            uid: user.uid,
             name: user.displayName || userDetails.name || fallbackName,
             email: user.email ?? userDetails.email ?? "",
             role: appUser.role
@@ -342,6 +405,7 @@ function App() {
           const user = await signInFirebaseAccount(userDetails);
           setCurrentUser({
             ...appUser,
+            uid: user.uid,
             name: user.displayName || fallbackName,
             email: user.email ?? userDetails.email ?? "",
             role: appUser.role
@@ -350,6 +414,7 @@ function App() {
       } else {
         setCurrentUser({
           ...appUser,
+          uid: appUser.uid,
           name: userDetails.name || fallbackName,
           email: userDetails.email ?? "",
           role: appUser.role
@@ -376,7 +441,7 @@ function App() {
   }
 
   async function handleStartSession(payload) {
-    const response = await startSession(payload);
+    const response = await startSession({ ...payload, user_id: userId });
     const nextSession = {
       sessionId: response.session_id,
       batteryId: payload.battery_id,
@@ -384,7 +449,7 @@ function App() {
       type: payload.config.discharge_profile,
       startTime: new Date().toISOString(),
       status: response.status,
-      sourceFile: response.command?.command?.source_file ?? "backend",
+      sourceFile: "backend",
       readings: []
     };
 
@@ -399,22 +464,49 @@ function App() {
   }
 
   async function handleEndSession(sessionId) {
-    const response = await endSession(sessionId);
+    const response = await endSession(sessionId, userId);
+    if (response.command_sent === false) {
+      throw new Error("Stop command was not sent to the Raspberry Pi.");
+    }
+    const stoppedSession = data?.testSessions?.find((session) => session.sessionId === sessionId);
+    const stoppedBatteryId = stoppedSession?.batteryId ?? dashboardBattery ?? initialBattery;
+    let finalizedPackets = [];
+    try {
+      const historical = await getHistorical(sessionId, { userId });
+      finalizedPackets = historical.packets ?? [];
+    } catch (error) {
+      console.warn("Historical refresh after session end failed.", error);
+    }
+
     setData((current) => ({
       ...current,
+      liveReadings: {
+        ...(current?.liveReadings ?? {}),
+        [stoppedBatteryId]: makeZeroLiveReading(stoppedBatteryId)
+      },
       testSessions: (current?.testSessions ?? []).map((session) => (
         session.sessionId === sessionId
-          ? { ...session, status: response.status, endedAt: new Date().toISOString() }
+          ? {
+            ...session,
+            status: response.status,
+            sourceFile: "backend",
+            endedAt: new Date().toISOString(),
+            readings: finalizedPackets.length > 0
+              ? finalizedPackets.map((packet) => backendTelemetryToReading(packet, session.startTime)).filter(Boolean)
+              : session.readings
+          }
           : session
       ))
     }));
+    setDashboardBattery(stoppedBatteryId);
     return response;
   }
 
-  function handlePauseSession(sessionId, paused) {
+  function handlePauseSession(sessionId, paused, deviceId) {
     return sendPiCommand({
       type: paused ? "PAUSE_PROFILE" : "RESUME_PROFILE",
       sessionId,
+      deviceId,
       command: { paused }
     });
   }

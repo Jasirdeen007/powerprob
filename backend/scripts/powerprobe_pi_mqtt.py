@@ -5,6 +5,7 @@ import json
 import os
 import random
 import signal
+import socket
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,10 +15,12 @@ from typing import Any
 import paho.mqtt.client as mqtt
 
 
-DEFAULT_BROKER_HOST = os.getenv("POWERPROBE_MQTT_HOST", "127.0.0.1")
+DEFAULT_BROKER_HOST = os.getenv("POWERPROBE_MQTT_HOST", "broker.emqx.io")
 DEFAULT_BROKER_PORT = int(os.getenv("POWERPROBE_MQTT_PORT", "1883"))
+DEFAULT_TOPIC_PREFIX = os.getenv("POWERPROBE_MQTT_TOPIC_PREFIX", "powerprobe/team6").strip("/")
+DEFAULT_PREFER_IPV4 = os.getenv("POWERPROBE_MQTT_PREFER_IPV4", "true").strip().lower() in {"1", "true", "yes", "on"}
 DEFAULT_DEVICE_ID = os.getenv("POWERPROBE_DEVICE_ID", "pi-001")
-DEFAULT_BATTERY_ID = os.getenv("POWERPROBE_BATTERY_ID", "B0047")
+DEFAULT_BATTERY_ID = os.getenv("POWERPROBE_BATTERY_ID", "TEAM6_PACK_1")
 DEFAULT_BATTERY_NAME = os.getenv("POWERPROBE_BATTERY_NAME", "")
 DEFAULT_STATE_FILE = os.getenv("POWERPROBE_STATE_FILE", "/home/pi/powerprobe/latest_profile.json")
 TELEMETRY_INTERVAL_SECONDS = float(os.getenv("POWERPROBE_TELEMETRY_INTERVAL", "1"))
@@ -78,6 +81,19 @@ def read_telemetry(session_id: str, battery_id: str, battery_name: str) -> dict[
     return packet
 
 
+def wait_for_profile_time(duration_s: float) -> bool:
+    deadline = time.time() + max(0.0, duration_s)
+    while time.time() < deadline:
+        if stop_requested.is_set() or not active_session_id:
+            return False
+        while paused and not stop_requested.is_set():
+            if not active_session_id:
+                return False
+            time.sleep(0.1)
+        time.sleep(min(0.1, max(0.0, deadline - time.time())))
+    return bool(active_session_id) and not stop_requested.is_set()
+
+
 def run_profile(command: dict[str, Any]) -> None:
     global latest_vref_v
 
@@ -105,7 +121,8 @@ def run_profile(command: dict[str, Any]) -> None:
             print(f"Skipping invalid control point: {point}")
             continue
 
-        time.sleep(max(0.0, timestamp_s - previous_timestamp))
+        if not wait_for_profile_time(timestamp_s - previous_timestamp):
+            break
         latest_vref_v = vref_v
         apply_output(vref_v)
         previous_timestamp = timestamp_s
@@ -119,9 +136,25 @@ def publish_json(client: mqtt.Client, topic: str, payload: dict[str, Any]) -> No
     client.publish(topic, json.dumps(payload), qos=1)
 
 
-def telemetry_loop(client: mqtt.Client, device_id: str, battery_id: str, battery_name: str) -> None:
-    telemetry_topic = f"powerprobe/{device_id}/telemetry"
-    status_topic = f"powerprobe/{device_id}/status"
+def resolve_broker_host(host: str, port: int, prefer_ipv4: bool) -> str:
+    if not prefer_ipv4:
+        return host
+    try:
+        infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+    except OSError as error:
+        print(f"Could not resolve MQTT host {host} to IPv4: {error}")
+        return host
+
+    for info in infos:
+        address = info[4][0]
+        if address:
+            return address
+    return host
+
+
+def telemetry_loop(client: mqtt.Client, topic_prefix: str, device_id: str, battery_id: str, battery_name: str) -> None:
+    telemetry_topic = f"{topic_prefix}/{device_id}/telemetry"
+    status_topic = f"{topic_prefix}/{device_id}/status"
     last_heartbeat = 0.0
 
     while not stop_requested.is_set():
@@ -169,6 +202,8 @@ def handle_command(message: dict[str, Any], state_file: Path) -> None:
         active_profile_task.start()
     elif command_type == "PAUSE_PROFILE":
         paused = True
+        latest_vref_v = 0.0
+        apply_output(0.0)
         print("Profile paused")
     elif command_type == "RESUME_PROFILE":
         if active_session_id:
@@ -186,6 +221,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="PowerProbe Raspberry Pi MQTT client.")
     parser.add_argument("--host", default=DEFAULT_BROKER_HOST, help="MQTT broker host or IP")
     parser.add_argument("--port", type=int, default=DEFAULT_BROKER_PORT, help="MQTT broker port")
+    parser.add_argument("--topic-prefix", default=DEFAULT_TOPIC_PREFIX, help="MQTT topic prefix, for example powerprobe/team6")
+    parser.add_argument("--prefer-ipv4", action=argparse.BooleanOptionalAction, default=DEFAULT_PREFER_IPV4, help="Resolve the MQTT broker to IPv4 before connecting")
     parser.add_argument("--device-id", default=DEFAULT_DEVICE_ID, help="Device id used in MQTT topics")
     parser.add_argument("--battery-id", default=DEFAULT_BATTERY_ID, help="Default battery id for telemetry")
     parser.add_argument("--battery-name", default=DEFAULT_BATTERY_NAME, help="Optional battery name")
@@ -198,18 +235,25 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     state_file = Path(args.state_file)
-    command_topic = f"powerprobe/{args.device_id}/command"
+    topic_prefix = args.topic_prefix.strip("/")
+    command_topic = f"{topic_prefix}/{args.device_id}/command"
+    broker_host = resolve_broker_host(args.host, args.port, args.prefer_ipv4)
 
     client = mqtt.Client(client_id=f"powerprobe-{args.device_id}")
+    client.reconnect_delay_set(min_delay=2, max_delay=30)
     if args.username:
         client.username_pw_set(args.username, args.password)
 
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
-            print(f"Connected to MQTT broker {args.host}:{args.port}")
+            print(f"Connected to MQTT broker {args.host}:{args.port} resolved_host={broker_host} topic_prefix={topic_prefix}")
             client.subscribe(command_topic, qos=1)
         else:
             print(f"MQTT connect failed rc={rc}")
+
+    def on_disconnect(client, userdata, rc):
+        if not stop_requested.is_set():
+            print(f"MQTT disconnected rc={rc}; reconnecting automatically")
 
     def on_message(client, userdata, message):
         try:
@@ -218,16 +262,18 @@ def main() -> None:
             print(f"Ignoring invalid command: {error}")
 
     client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
     client.on_message = on_message
 
     signal.signal(signal.SIGTERM, lambda signum, frame: stop_requested.set())
     signal.signal(signal.SIGINT, lambda signum, frame: stop_requested.set())
 
-    client.connect(args.host, args.port, keepalive=30)
+    print(f"Connecting to MQTT broker {args.host}:{args.port} resolved_host={broker_host} topic_prefix={topic_prefix}")
+    client.connect_async(broker_host, args.port, keepalive=30)
     client.loop_start()
     telemetry_thread = Thread(
         target=telemetry_loop,
-        args=(client, args.device_id, args.battery_id, args.battery_name),
+        args=(client, topic_prefix, args.device_id, args.battery_id, args.battery_name),
         daemon=True,
     )
     telemetry_thread.start()

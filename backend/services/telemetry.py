@@ -25,13 +25,21 @@ def normalize_telemetry_payload(payload: dict) -> dict:
 
 def process_telemetry(payload: dict, device_id: str | None = None) -> dict:
     packet = TelemetryPacket.model_validate(normalize_telemetry_payload(payload))
+    from services.sessions import get_session_user_id
+
+    user_id = packet.user_id or get_session_user_id(packet.session_id)
+    if not user_id:
+        logger.warning("Telemetry ignored for unknown user session=%s device=%s", packet.session_id, device_id)
+        raise ValueError(f"No user mapping found for telemetry session {packet.session_id}")
+
     enriched = enrich_packet(packet)
     data = enriched.model_dump(mode="json")
+    data["user_id"] = user_id
     if device_id:
         data["device_id"] = device_id
 
-    firebase.write_latest_telemetry(packet.session_id, data)
-    firebase.append_live_telemetry(packet.session_id, data)
+    firebase.write_latest_telemetry(packet.session_id, data, user_id)
+    firebase.append_live_telemetry(packet.session_id, data, user_id)
     logger.info(
         "Telemetry accepted session=%s battery=%s device=%s event=%s",
         packet.session_id,
