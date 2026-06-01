@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import socket
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -50,7 +52,8 @@ class MqttService:
         if self.client:
             return
 
-        self.client = mqtt.Client(client_id=settings.mqtt_client_id)
+        client_id = f"{settings.mqtt_client_id}-{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+        self.client = mqtt.Client(client_id=client_id)
         if settings.mqtt_username:
             self.client.username_pw_set(settings.mqtt_username, settings.mqtt_password)
         self.client.on_connect = self._on_connect
