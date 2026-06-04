@@ -54,6 +54,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
   const activeDeviceId = activeSession.deviceId ?? "";
   const isRunning = Boolean(activeSession.isRunning);
   const isPaused = Boolean(activeSession.isPaused);
+  const isDemoSession = Boolean(activeSession.isDemo);
   const activeSessionMap = piStatus?.active_sessions ?? {};
   const deviceSessionMap = piStatus?.device_sessions ?? {};
   const deviceEntries = Object.entries(piStatus?.devices ?? {});
@@ -84,7 +85,14 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
     !isPiPaused &&
     activeSessionReadings.some(isRealPiReading)
   );
-  const fullReadings = hasPiTelemetry ? activeSessionReadings : [ZERO_READING];
+  const hasDemoTelemetry = Boolean(
+    isDemoSession &&
+    visibleSessionId &&
+    !isPaused &&
+    activeSessionReadings.some(isRealPiReading)
+  );
+  const hasLiveTelemetry = hasPiTelemetry || hasDemoTelemetry;
+  const fullReadings = hasLiveTelemetry ? activeSessionReadings : [ZERO_READING];
 
   const profileSpecs = {
     "Surveillance Drone": { cRating: "10", batteryType: "Li-ion", mah: "4500", numCells: "4", voltage: "14.8" },
@@ -118,7 +126,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
       ]
     };
 
-  const activeLivePoint = hasPiTelemetry
+  const activeLivePoint = hasLiveTelemetry
     ? {
       ...livePoint,
       ...point,
@@ -135,8 +143,8 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
     const computedSoh = Number((99.5 - (index / Math.max(1, list.length)) * 4.2).toFixed(2));
     return {
       ...reading,
-      soc: hasPiTelemetry ? (Number.isFinite(reading.soc) ? reading.soc : computedSoc) : 0,
-      soh: hasPiTelemetry ? (Number.isFinite(reading.soh) ? reading.soh : computedSoh) : 0,
+      soc: hasLiveTelemetry ? (Number.isFinite(reading.soc) ? reading.soc : computedSoc) : 0,
+      soh: hasLiveTelemetry ? (Number.isFinite(reading.soh) ? reading.soh : computedSoh) : 0,
       power: Number((reading.voltage * reading.current).toFixed(2)),
       thermalLimit: 38,
       criticalLimit: 45
@@ -146,7 +154,9 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
   const powerValue = activeLivePoint.voltage * activeLivePoint.current;
   const tone = activeLivePoint.status === "critical" ? "danger" : activeLivePoint.status === "warning" ? "warn" : "good";
   const PiStatusIcon = piConnected ? Wifi : WifiOff;
-  const piStatusLabel = hasPiTelemetry
+  const piStatusLabel = hasDemoTelemetry
+    ? "Demo data running"
+    : hasPiTelemetry
     ? "Pi data receiving"
     : isPiPaused
       ? "Pi paused"
@@ -155,7 +165,9 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
         : piConnected
           ? "Pi available"
           : "Pi unavailable";
-  const piStatusDetail = hasPiTelemetry
+  const piStatusDetail = hasDemoTelemetry
+    ? "Pi is unavailable, so bundled demo telemetry is updating the dashboard"
+    : hasPiTelemetry
     ? "Live telemetry is updating the dashboard"
     : isPiPaused
       ? "Telemetry is paused for the active session"

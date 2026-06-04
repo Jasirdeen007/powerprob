@@ -64,6 +64,38 @@ function makeZeroLiveReading(batteryId) {
   };
 }
 
+function makeDemoSessionId(batteryId) {
+  return `DEMO_${batteryId}_${Date.now()}`;
+}
+
+function getDemoSessionForBattery(batteryId) {
+  return (
+    localDemoData.testSessions.find((session) => session.batteryId === batteryId && session.readings?.length > 0) ??
+    localDemoData.testSessions.find((session) => session.readings?.length > 0)
+  );
+}
+
+function makeDemoReading(rawReading, sessionId, index) {
+  const voltage = Number(rawReading?.voltage ?? 0);
+  const current = Math.abs(Number(rawReading?.current ?? 0));
+  const temperature = Math.max(24, Number(rawReading?.temperature ?? 0) + 20);
+  const soc = Math.round(clamp(((voltage - 3) / 1.25) * 100, 0, 100));
+  const soh = Number((99.5 - Math.min(index, 300) * 0.01).toFixed(2));
+
+  return {
+    time: index,
+    voltage,
+    current,
+    temperature,
+    timestamp: new Date().toISOString(),
+    sessionId,
+    soc,
+    soh,
+    power: Number((voltage * current).toFixed(2)),
+    status: temperature >= 45 ? "critical" : temperature >= 38 ? "warning" : "healthy"
+  };
+}
+
 function mergeLiveReadings(currentLiveReadings, incomingLiveReadings) {
   if (!incomingLiveReadings || Object.keys(incomingLiveReadings).length === 0) {
     return currentLiveReadings;
@@ -349,9 +381,60 @@ function App() {
   }, [userId]);
 
   useEffect(() => {
+    if (!activeRun.isDemo || !activeRun.sessionId || activeRun.isPaused) return undefined;
+
+    const demoSession = getDemoSessionForBattery(activeRun.batteryId);
+    const sourceReadings = demoSession?.readings ?? [];
+    if (sourceReadings.length === 0) return undefined;
+
+    let cursor = 0;
+    const intervalId = window.setInterval(() => {
+      const batteryId = activeRun.batteryId || demoSession.batteryId || initialBattery;
+      const point = makeDemoReading(sourceReadings[cursor % sourceReadings.length], activeRun.sessionId, cursor);
+      cursor += 1;
+
+      setData((current) => {
+        if (!current) return current;
+        const currentLive = current.liveReadings?.[batteryId] ?? makeZeroLiveReading(batteryId);
+        const nextStream = [...(currentLive.stream ?? []), point].slice(-300);
+
+        return {
+          ...current,
+          liveReadings: {
+            ...(current.liveReadings ?? {}),
+            [batteryId]: {
+              ...currentLive,
+              batteryId,
+              batteryName: activeRun.batteryName ?? "",
+              sessionId: activeRun.sessionId,
+              mode: activeRun.mode ?? "DISCHARGE",
+              status: point.status,
+              soh: point.soh,
+              stream: nextStream
+            }
+          },
+          testSessions: (current.testSessions ?? []).map((session) => (
+            session.sessionId === activeRun.sessionId
+              ? {
+                ...session,
+                readings: [...(session.readings ?? []), point].slice(-300)
+              }
+              : session
+          ))
+        };
+      });
+      setDashboardBattery(batteryId);
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [activeRun, initialBattery]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function refreshBackendLiveTelemetry() {
+      if (activeRun.isDemo) return;
+
       try {
         const payload = await getLiveTelemetry(userId, { scope: "all" });
         const liveReadings = backendTelemetryToLiveReadings(payload.telemetry ?? {});
@@ -384,7 +467,7 @@ function App() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [dashboardBattery, initialBattery, userId]);
+  }, [activeRun.isDemo, dashboardBattery, initialBattery, userId]);
 
   useEffect(() => {
     if (!authEnabled) return undefined;
@@ -492,6 +575,54 @@ function App() {
   }
 
   async function handleStartSession(payload) {
+    if (!piStatus?.connected) {
+      const demoSession = getDemoSessionForBattery(payload.battery_id);
+      const batteryId = payload.battery_id || demoSession?.batteryId || initialBattery;
+      const sessionId = makeDemoSessionId(batteryId);
+      const response = {
+        session_id: sessionId,
+        device_id: "demo-fallback",
+        status: "running",
+        fallback: "demo"
+      };
+
+      setActiveRun({
+        sessionId,
+        deviceId: "demo-fallback",
+        isRunning: true,
+        isPaused: false,
+        isDemo: true,
+        batteryId,
+        batteryName: payload.battery_name ?? "",
+        mode: payload.config?.discharge_profile ?? "DISCHARGE"
+      });
+
+      const nextSession = {
+        sessionId,
+        batteryId,
+        batteryName: payload.battery_name ?? "",
+        deviceId: "demo-fallback",
+        type: payload.config?.discharge_profile ?? "demo",
+        startTime: new Date().toISOString(),
+        status: "running",
+        sourceFile: "demo-fallback",
+        readings: []
+      };
+
+      setData((current) => ({
+        ...current,
+        liveReadings: {
+          ...(current?.liveReadings ?? {}),
+          [batteryId]: makeZeroLiveReading(batteryId)
+        },
+        testSessions: [nextSession, ...(current?.testSessions ?? [])]
+      }));
+
+      setSelectedBattery(batteryId);
+      setDashboardBattery(batteryId);
+      return response;
+    }
+
     const response = await startSession({ ...payload, user_id: userId });
     setActiveRun({
       sessionId: response.session_id,
@@ -521,6 +652,42 @@ function App() {
   }
 
   async function handleEndSession(sessionId) {
+    if (activeRun.isDemo && activeRun.sessionId === sessionId) {
+      const stoppedBatteryId = activeRun.batteryId ?? dashboardBattery ?? initialBattery;
+      const response = {
+        session_id: sessionId,
+        status: "completed",
+        command_sent: true,
+        fallback: "demo"
+      };
+
+      setData((current) => ({
+        ...current,
+        liveReadings: {
+          ...(current?.liveReadings ?? {}),
+          [stoppedBatteryId]: makeZeroLiveReading(stoppedBatteryId)
+        },
+        testSessions: (current?.testSessions ?? []).map((session) => (
+          session.sessionId === sessionId
+            ? {
+              ...session,
+              status: "completed",
+              endedAt: new Date().toISOString()
+            }
+            : session
+        ))
+      }));
+      setDashboardBattery(stoppedBatteryId);
+      setActiveRun({
+        sessionId: "",
+        deviceId: "",
+        isRunning: false,
+        isPaused: false,
+        isDemo: false
+      });
+      return response;
+    }
+
     const response = await endSession(sessionId, userId);
     if (response.command_sent === false) {
       throw new Error("Stop command was not sent to the Raspberry Pi.");
