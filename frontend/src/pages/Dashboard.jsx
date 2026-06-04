@@ -70,10 +70,11 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
   const visibleDeviceState = piStatus?.devices?.[visibleDeviceId]?.status?.state
     ?? deviceEntries.find(([, device]) => device?.active_session_id === visibleSessionId)?.[1]?.status?.state
     ?? "";
-  const isPiPaused = String(visibleDeviceState).toLowerCase() === "paused" || (activeSessionId && isPaused);
   const isPiBusy = Boolean(visibleSessionId);
   const ownsVisibleSession = Boolean(activeSessionId && activeSessionId === visibleSessionId);
-  const controlPaused = Boolean(isPaused || (ownsVisibleSession && isPiPaused));
+  const reportedPiPaused = String(visibleDeviceState).toLowerCase() === "paused";
+  const isPiPaused = ownsVisibleSession ? Boolean(isPaused) : reportedPiPaused;
+  const controlPaused = Boolean(ownsVisibleSession ? isPaused : isPiPaused);
   const activeSessionReadings = visibleSessionId
     ? liveReadings.filter((reading) => reading.sessionId === visibleSessionId)
     : [];

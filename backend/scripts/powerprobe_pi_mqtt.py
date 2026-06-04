@@ -32,6 +32,7 @@ active_profile_name = "IDLE"
 latest_vref_v = 0.0
 paused = False
 stop_requested = Event()
+status_dirty = Event()
 
 
 def utc_now() -> str:
@@ -159,7 +160,7 @@ def telemetry_loop(client: mqtt.Client, topic_prefix: str, device_id: str, batte
 
     while not stop_requested.is_set():
         now = time.time()
-        if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+        if status_dirty.is_set() or now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
             if active_session_id and paused:
                 device_state = "paused"
             elif active_session_id:
@@ -177,6 +178,7 @@ def telemetry_loop(client: mqtt.Client, topic_prefix: str, device_id: str, batte
                     "profile": active_profile_name,
                 },
             )
+            status_dirty.clear()
             last_heartbeat = now
 
         if active_session_id and not paused:
@@ -197,6 +199,7 @@ def handle_command(message: dict[str, Any], state_file: Path) -> None:
         active_session_id = session_id
         active_profile_name = str(command.get("profile_name", command.get("profile_id", "PROFILE")))
         paused = False
+        status_dirty.set()
         save_latest_profile(state_file, session_id, command)
 
         if active_profile_task and active_profile_task.is_alive():
@@ -210,10 +213,12 @@ def handle_command(message: dict[str, Any], state_file: Path) -> None:
         paused = True
         latest_vref_v = 0.0
         apply_output(0.0)
+        status_dirty.set()
         print("Profile paused")
     elif command_type == "RESUME_PROFILE":
         if active_session_id:
             paused = False
+            status_dirty.set()
         print("Profile resumed")
     elif command_type == "STOP_PROFILE":
         paused = True
@@ -221,6 +226,7 @@ def handle_command(message: dict[str, Any], state_file: Path) -> None:
         active_profile_name = "IDLE"
         latest_vref_v = 0.0
         apply_output(0.0)
+        status_dirty.set()
 
 
 def parse_args() -> argparse.Namespace:
