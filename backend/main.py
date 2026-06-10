@@ -51,3 +51,16 @@ async def log_requests(request, call_next):
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.get("/app/info")
+def app_info():
+    return {
+        "name": "PowerProbe",
+        "version": app.version,
+        "credits": [
+            "PowerProbe Team 6",
+            "Battery analytics, telemetry, and traceability platform"
+        ],
+        "manual": "frontend/docs/README.md"
+    }

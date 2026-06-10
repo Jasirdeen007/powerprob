@@ -79,6 +79,13 @@ function getStatusColor(metric, value) {
 
 const TIME_SERIES_TYPES = new Set(["line", "area", "scatter", "step", "multiline"]);
 
+function hasMeaningfulTelemetry(data, metricKey) {
+  return data.some((reading) => {
+    if (reading?.timestamp) return true;
+    return [reading?.[metricKey], reading?.voltage, reading?.current, reading?.temperature].some((value) => Number(value) !== 0);
+  });
+}
+
 function TimeSeriesTooltip({ active, payload, label, title, unit, isPercent }) {
   if (!active || !payload?.length) return null;
   const timeLabel = formatTimeTick(label);
@@ -116,11 +123,13 @@ function TelemetryChartCard({
   customAxisLabels,
   operationMode = "discharge",
   compact = false,
-  showToggles = true
+  showToggles = true,
+  autoFollowLatest = true
 }) {
   const chartRef = useRef(null);
   const scrollRef = useRef(null);
   const followLatestRef = useRef(true);
+  const hadActiveDataRef = useRef(false);
   const options = useMemo(() => getChartOptionsForMetric(metricKey), [metricKey]);
   const defaultType = useMemo(() => getDefaultChartType(metricKey), [metricKey]);
   const [activeChart, setActiveChart] = useState(defaultType);
@@ -133,6 +142,7 @@ function TelemetryChartCard({
     ...d,
     time: typeof d.time === "number" ? d.time : Number(d.time) || 0
   })), [data]);
+  const hasActiveData = useMemo(() => hasMeaningfulTelemetry(processedData, metricKey), [metricKey, processedData]);
 
   const timeValues = useMemo(() => processedData.map((d) => d.time).filter(Number.isFinite), [processedData]);
   const timeAxis = useMemo(() => getTimeAxisExtent(timeValues), [timeValues]);
@@ -161,13 +171,28 @@ function TelemetryChartCard({
   const formatTick = (v) => formatValueTick(metricKey, v);
 
   useEffect(() => {
+    if (!autoFollowLatest) {
+      if (scrollRef.current) scrollRef.current.scrollLeft = 0;
+      followLatestRef.current = false;
+      return;
+    }
+    if (!hasActiveData) {
+      if (scrollRef.current) scrollRef.current.scrollLeft = 0;
+      followLatestRef.current = false;
+      hadActiveDataRef.current = false;
+      return;
+    }
+    if (!hadActiveDataRef.current) {
+      followLatestRef.current = true;
+      hadActiveDataRef.current = true;
+    }
     if (followLatestRef.current) {
       scrollChartToEnd(scrollRef.current);
     }
-  }, [domainMax, processedData.length, timeSeriesWidth]);
+  }, [autoFollowLatest, domainMax, hasActiveData, processedData.length, timeSeriesWidth]);
 
   function handleChartScroll(event) {
-    followLatestRef.current = isScrolledNearEnd(event.currentTarget);
+    followLatestRef.current = autoFollowLatest && hasActiveData && isScrolledNearEnd(event.currentTarget);
   }
 
   function handleDownloadPng() {

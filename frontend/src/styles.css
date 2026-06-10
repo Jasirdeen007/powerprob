@@ -2233,6 +2233,7 @@ h3 {
   gap: 8px;
   justify-content: center;
   justify-self: center;
+  align-items: center;
   min-width: 0;
 }
 
@@ -2247,6 +2248,14 @@ h3 {
   font-size: 14px;
   transition: background-color 120ms ease, color 120ms ease;
   position: relative;
+}
+
+.nav-link-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
 .nav-item:hover:not(:disabled) {
@@ -2267,9 +2276,28 @@ h3 {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   flex-shrink: 0;
   justify-self: end;
+}
+
+.header-theme-toggle {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.header-theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #f8fafc;
 }
 
 .live-status {
@@ -2485,6 +2513,9 @@ h3 {
   }
 
   .mobile-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     padding: 10px 0;
     border: none;
     background: transparent;
@@ -2492,6 +2523,7 @@ h3 {
     text-align: left;
     cursor: pointer;
     font-weight: 600;
+    text-decoration: none;
     transition: color 0.2s ease;
   }
 
@@ -4424,6 +4456,14 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   color: var(--text-main);
 }
 
+.header-profile-menu-top {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border-main);
+}
+
 .header-profile-user {
   display: flex;
   gap: 12px;
@@ -4475,6 +4515,7 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   font-weight: 600;
   cursor: pointer;
   text-align: left;
+  text-decoration: none;
   transition: background-color 100ms ease, color 100ms ease;
 }
 
@@ -4489,6 +4530,76 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 
 .header-profile-action.logout:hover {
   background: rgba(248, 113, 113, 0.15);
+}
+
+.about-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.about-modal {
+  position: relative;
+  width: min(420px, 100%);
+  padding: 24px;
+  border: 1px solid var(--border-main);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  color: var(--text-main);
+  box-shadow: var(--shadow-xl);
+}
+
+.about-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-main);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+
+.about-modal-close:hover {
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+.about-modal-mark {
+  margin-bottom: 14px;
+}
+
+.about-modal h2 {
+  margin: 0 0 6px;
+  font-size: 1.35rem;
+}
+
+.about-modal p {
+  margin: 0;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.about-modal-credits {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.about-modal-credits span {
+  padding: 9px 10px;
+  border: 1px solid var(--border-main);
+  border-radius: 8px;
+  color: var(--text-main);
+  background: var(--bg-secondary);
+  font-size: 0.9rem;
 }
 
 .telemetry-chart-card {
@@ -4678,11 +4789,17 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 }
 
 /* Make telemetry chart badges high-contrast in dark mode */
-:root[data-theme='dark'] .telemetry-chart-range,
-:root[data-theme='dark'] .telemetry-chart-value {
+:root[data-theme='dark'] .telemetry-chart-range {
   /* Subtle badges in dark mode: light translucent background, muted text */
   background: rgba(255,255,255,0.03) !important;
   color: var(--text-muted) !important;
+  padding: 4px 8px !important;
+  border-radius: 8px !important;
+  display: inline-block;
+  box-shadow: none !important;
+}
+:root[data-theme='dark'] .telemetry-chart-value {
+  background: rgba(255,255,255,0.04) !important;
   padding: 4px 8px !important;
   border-radius: 8px !important;
   display: inline-block;
@@ -4805,6 +4922,85 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   background: var(--bg-elevated) !important;
 }
 
+:root[data-theme='dark'] .landing-root {
+  background: var(--bg-main) !important;
+  color: var(--text-main) !important;
+}
+
+:root[data-theme='dark'] .landing-topnav,
+:root[data-theme='dark'] .landing-preview,
+:root[data-theme='dark'] .auth-card {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-main) !important;
+  color: var(--text-main) !important;
+}
+
+:root[data-theme='dark'] .landing-brand,
+:root[data-theme='dark'] .landing-slide-copy h1,
+:root[data-theme='dark'] .landing-copy h1,
+:root[data-theme='dark'] .auth-card h1,
+:root[data-theme='dark'] .auth-card label,
+:root[data-theme='dark'] .preview-metrics strong,
+:root[data-theme='dark'] .preview-chart strong {
+  color: var(--text-main) !important;
+}
+
+:root[data-theme='dark'] .landing-slide-copy p,
+:root[data-theme='dark'] .landing-copy p,
+:root[data-theme='dark'] .auth-card p,
+:root[data-theme='dark'] .preview-metrics span,
+:root[data-theme='dark'] .preview-chart span {
+  color: var(--text-muted) !important;
+}
+
+:root[data-theme='dark'] .landing-btn.ghost,
+:root[data-theme='dark'] .auth-card label span,
+:root[data-theme='dark'] .auth-card select,
+:root[data-theme='dark'] .preview-metrics article,
+:root[data-theme='dark'] .preview-chart,
+:root[data-theme='dark'] .carousel-nav-btn,
+:root[data-theme='dark'] .section-hide-button,
+:root[data-theme='dark'] .chart-download-actions button,
+:root[data-theme='dark'] .visual-toggle button,
+:root[data-theme='dark'] .about-modal-close {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border-strong) !important;
+  color: var(--text-main) !important;
+}
+
+:root[data-theme='dark'] .auth-card input,
+:root[data-theme='dark'] .auth-card select {
+  color: var(--text-main) !important;
+}
+
+:root[data-theme='dark'] .auth-card input::placeholder {
+  color: var(--text-light) !important;
+}
+
+:root[data-theme='dark'] .landing-btn.primary {
+  background: var(--brand-gradient) !important;
+  color: #ffffff !important;
+}
+
+:root[data-theme='dark'] .section-hide-button:hover,
+:root[data-theme='dark'] .chart-download-actions button:hover,
+:root[data-theme='dark'] .visual-toggle button.active {
+  background: rgba(96, 165, 250, 0.16) !important;
+  border-color: var(--brand-secondary) !important;
+  color: #dbeafe !important;
+}
+
+:root[data-theme='dark'] .about-modal,
+:root[data-theme='dark'] .about-modal-credits span {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-main) !important;
+  color: var(--text-main) !important;
+}
+
+:root[data-theme='dark'] .about-modal-backdrop {
+  background: rgba(0, 0, 0, 0.72) !important;
+}
+
 @media (max-width: 960px) {
   .history-filters-layout {
     grid-template-columns: 1fr;
@@ -4831,6 +5027,41 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 
 .global-charts-head {
   margin-bottom: 12px;
+}
+
+.section-toggle-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.section-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.section-hide-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-main);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text-main);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.section-hide-button:hover {
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+  background: rgba(59, 130, 246, 0.08);
 }
 
 .global-charts-head h2 {

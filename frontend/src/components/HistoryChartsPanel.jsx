@@ -39,12 +39,12 @@ function ChartSet({ records, label }) {
     <div className="history-battery-chart-set">
       {label ? <h3>{label} <span>{enriched.length} readings</span></h3> : null}
       <div className="history-charts-grid">
-        <TelemetryChartCard title="Voltage" metricKey="voltage" unit="V" data={enriched} customAxisLabels={axisLabels("Voltage (V)")} compact showToggles={false} />
-        <TelemetryChartCard title="Current" metricKey="current" unit="A" data={enriched} customAxisLabels={axisLabels("Current (A)")} compact showToggles={false} />
-        <TelemetryChartCard title="Temperature" metricKey="temperature" unit="C" data={enriched} customAxisLabels={axisLabels("Temperature (C)")} compact showToggles={false} />
-        <TelemetryChartCard title="SOC" metricKey="soc" unit="%" data={enriched} forceYRange={{ min: 0, max: 100 }} customAxisLabels={axisLabels("SOC (%)")} compact showToggles={false} />
-        <TelemetryChartCard title="SOH" metricKey="soh" unit="%" data={enriched} forceYRange={{ min: 0, max: 100 }} customAxisLabels={axisLabels("SOH (%)")} compact showToggles={false} />
-        <TelemetryChartCard title="Power" metricKey="power" unit="W" data={enriched} customAxisLabels={axisLabels("Power (W)")} compact showToggles={false} />
+        <TelemetryChartCard title="Voltage" metricKey="voltage" unit="V" data={enriched} customAxisLabels={axisLabels("Voltage (V)")} compact showToggles={false} autoFollowLatest={false} />
+        <TelemetryChartCard title="Current" metricKey="current" unit="A" data={enriched} customAxisLabels={axisLabels("Current (A)")} compact showToggles={false} autoFollowLatest={false} />
+        <TelemetryChartCard title="Temperature" metricKey="temperature" unit="C" data={enriched} customAxisLabels={axisLabels("Temperature (C)")} compact showToggles={false} autoFollowLatest={false} />
+        <TelemetryChartCard title="SOC" metricKey="soc" unit="%" data={enriched} forceYRange={{ min: 0, max: 100 }} customAxisLabels={axisLabels("SOC (%)")} compact showToggles={false} autoFollowLatest={false} />
+        <TelemetryChartCard title="SOH" metricKey="soh" unit="%" data={enriched} forceYRange={{ min: 0, max: 100 }} customAxisLabels={axisLabels("SOH (%)")} compact showToggles={false} autoFollowLatest={false} />
+        <TelemetryChartCard title="Power" metricKey="power" unit="W" data={enriched} customAxisLabels={axisLabels("Power (W)")} compact showToggles={false} autoFollowLatest={false} />
       </div>
     </div>
   );

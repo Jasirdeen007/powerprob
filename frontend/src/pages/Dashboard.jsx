@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Activity, Flame, Gauge, Play, Pause, Square, Zap, BatteryFull, Settings, Wifi, WifiOff } from "lucide-react";
+import { Activity, Eye, EyeOff, Flame, Gauge, Play, Pause, Square, Zap, BatteryFull, Settings, Wifi, WifiOff } from "lucide-react";
 import MetricCard from "../components/MetricCard";
 import TelemetryChartCard from "../components/TelemetryChartCard";
 import ConfigurationModal from "../components/ConfigurationModal";
@@ -47,6 +47,8 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
   const [sessionError, setSessionError] = useState("");
   const [batteryName, setBatteryName] = useState("");
   const [chargeModalOpen, setChargeModalOpen] = useState(false);
+  const [instrumentHidden, setInstrumentHidden] = useState(false);
+  const [globalChartsHidden, setGlobalChartsHidden] = useState(false);
 
   const piConnected = Boolean(piStatus?.connected);
   const liveReadings = Array.isArray(liveStream) ? liveStream : [];
@@ -352,16 +354,28 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
         </div>
       </section>
 
-      <div className="instrument-panel-header">
+      <div className="instrument-panel-header section-toggle-head">
         <div>
           <h2>Instrument Panel</h2>
           <p>Live battery telemetry diagnostics</p>
         </div>
-        <div className="header-status">
+        <div className="section-header-actions">
           <span className={`status-badge ${activeLivePoint.status}`}>{statusLabel[activeLivePoint.status]}</span>
+          <button
+            className="section-hide-button"
+            type="button"
+            onClick={() => setInstrumentHidden((hidden) => !hidden)}
+            aria-expanded={!instrumentHidden}
+            title={instrumentHidden ? "Show instrument panel" : "Hide instrument panel"}
+          >
+            {instrumentHidden ? <Eye size={16} /> : <EyeOff size={16} />}
+            {instrumentHidden ? "Show" : "Hide"}
+          </button>
         </div>
       </div>
 
+      {!instrumentHidden && (
+        <>
       <div className="metrics-row">
         <MetricCard icon={Zap} label="Voltage" value={`${activeLivePoint.voltage.toFixed(2)} V`} detail="active bus" tone="good" />
         <MetricCard icon={Activity} label="Current" value={`${activeLivePoint.current.toFixed(2)} A`} detail="realtime draw" tone="good" />
@@ -373,16 +387,32 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
         <MetricCard icon={Gauge} label="SOH" value={`${(readings[readings.length - 1]?.soh ?? 100.0).toFixed(1)}%`} detail="health status" tone="good" />
         <MetricCard icon={Zap} label="Power" value={`${powerValue.toFixed(1)} W`} detail="power draw" tone="good" />
       </div>
+        </>
+      )}
 
       <section className="global-charts-section">
-        <div className="global-charts-head">
+        <div className="global-charts-head section-toggle-head">
           <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
             <h2>Global Telemetry</h2>
-            {!hasPiTelemetry && <span className="demo-badge">Waiting for Pi data</span>}
+            {!hasLiveTelemetry && <span className="demo-badge">Waiting for Pi data</span>}
           </div>
-          <p>Six live charts — axes adapt to {operationMode} operating range</p>
+          <div className="section-header-actions">
+            <p>Six live charts — axes adapt to {operationMode} operating range</p>
+            <button
+              className="section-hide-button"
+              type="button"
+              onClick={() => setGlobalChartsHidden((hidden) => !hidden)}
+              aria-expanded={!globalChartsHidden}
+              title={globalChartsHidden ? "Show global telemetry charts" : "Hide global telemetry charts"}
+            >
+              {globalChartsHidden ? <Eye size={16} /> : <EyeOff size={16} />}
+              {globalChartsHidden ? "Show" : "Hide"}
+            </button>
+          </div>
         </div>
 
+        {!globalChartsHidden && (
+          <>
         <div className="chart-row-two-cols">
           <TelemetryChartCard
             title="Voltage Trend"
@@ -447,6 +477,8 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             showToggles
           />
         </div>
+          </>
+        )}
       </section>
 
       <CustomChartBuilder data={readings} operationMode={operationMode} />

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PowerProbe Help Documentation</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f7fafc;
+        color: #172033;
+        line-height: 1.6;
+      }
+      main {
+        width: min(880px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 40px 0;
+      }
+      h1, h2 {
+        line-height: 1.2;
+      }
+      section {
+        margin-top: 24px;
+        padding: 22px;
+        border: 1px solid #dbe5f3;
+        border-radius: 10px;
+        background: #ffffff;
+      }
+      code {
+        padding: 2px 5px;
+        border-radius: 5px;
+        background: #edf2f7;
+      }
+      a {
+        color: #2563eb;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>PowerProbe Help Documentation</h1>
+      <p>Use this quick guide to operate the dashboard. The full project manual is available in the repository at <code>frontend/docs/README.md</code> and <code>WORKING_MANUAL.md</code>.</p>
+
+      <section>
+        <h2>Run A Test</h2>
+        <ol>
+          <li>Open Dashboard.</li>
+          <li>Use Configuration to set charge or discharge values.</li>
+          <li>Click Run to start a Pi-backed session. If the Pi is unavailable, bundled demo telemetry runs automatically.</li>
+          <li>Click Stop to end the session and reset live values to zero.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Review History</h2>
+        <p>Open History Analytics to filter completed sessions by battery, mode, and date range. Charts and exports update from the filtered selection.</p>
+      </section>
+
+      <section>
+        <h2>Services</h2>
+        <p>Frontend: <code>http://127.0.0.1:5173</code></p>
+        <p>Backend: <code>http://127.0.0.1:8001</code></p>
+        <p>Backend API docs: <code>http://127.0.0.1:8001/docs</code></p>
+      </section>
+    </main>
+  </body>
+</html>

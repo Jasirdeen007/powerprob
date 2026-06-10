@@ -17,6 +17,24 @@ import {
 import ToastNotification from "../components/ToastNotification";
 import { authEnabled, sendPasswordReset } from "../firebaseClient";
 
+const RECENT_EMAILS_KEY = "powerprobe_recent_emails";
+
+function readRecentEmails() {
+  try {
+    return JSON.parse(window.localStorage.getItem(RECENT_EMAILS_KEY) ?? "[]").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentEmail(email) {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return [];
+  const next = [normalized, ...readRecentEmails().filter((item) => item !== normalized)].slice(0, 6);
+  window.localStorage.setItem(RECENT_EMAILS_KEY, JSON.stringify(next));
+  return next;
+}
+
 function BrandLogo({ size = 24 }) {
   return (
     <span className="brand-logo-mark landing-logo" aria-hidden="true">
@@ -228,6 +246,7 @@ function PreviewMetric({ icon: Icon, label, value }) {
 
 function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, authError }) {
   const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [recentEmails, setRecentEmails] = useState(readRecentEmails);
   const [toastMessage, setToastMessage] = useState(null);
   const [toastType, setToastType] = useState("error");
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -248,6 +267,7 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
   function handleSubmit(event) {
     event.preventDefault();
     const fallbackName = form.email ? form.email.split("@")[0] : "Battery Test User";
+    setRecentEmails(saveRecentEmail(form.email));
     onAuthSubmit({
       mode: isSignup ? "signup" : "login",
       name: isSignup ? form.name.trim() || fallbackName : fallbackName,
@@ -256,6 +276,12 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
       role: "User"
     });
   }
+
+  const emailPrefix = form.email.trim();
+  const emailSuggestions = [
+    ...recentEmails,
+    ...(emailPrefix && !emailPrefix.includes("@") ? [`${emailPrefix}@gmail.com`] : [])
+  ].filter((email, index, list) => email && list.indexOf(email) === index);
 
   async function handleForgotSubmit(event) {
     event.preventDefault();
@@ -285,6 +311,11 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
         duration={5000}
         onClose={() => setToastMessage(null)}
       />
+      <datalist id="powerprobe-email-suggestions">
+        {emailSuggestions.map((email) => (
+          <option key={email} value={email} />
+        ))}
+      </datalist>
       <button className="landing-btn ghost back" onClick={onBackHome} type="button">
         <ArrowLeft size={16} /> Back
       </button>
@@ -304,6 +335,8 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
                 value={form.email}
                 onChange={(event) => updateField("email", event.target.value)}
                 placeholder="user@example.com"
+                list="powerprobe-email-suggestions"
+                autoComplete="username email"
                 required
               />
             </span>
@@ -355,11 +388,12 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
                 value={form.email}
                 onChange={(event) => updateField("email", event.target.value)}
                 placeholder="user@example.com"
+                list="powerprobe-email-suggestions"
+                autoComplete="username email"
                 required
               />
             </span>
           </label>
-
           <label>
             Password
             <span>
@@ -369,6 +403,7 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
                 value={form.password}
                 onChange={(event) => updateField("password", event.target.value)}
                 placeholder="Password"
+                autoComplete={isSignup ? "new-password" : "current-password"}
                 required
               />
             </span>

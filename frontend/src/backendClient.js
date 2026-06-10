@@ -28,6 +28,10 @@ export function getProfiles() {
   return request("/profiles");
 }
 
+export function getAppInfo() {
+  return request("/app/info");
+}
+
 export function getSessions(userId) {
   const params = new URLSearchParams({ user_id: userId });
   return request(`/sessions?${params.toString()}`);
