@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Activity, Eye, EyeOff, Flame, Gauge, Play, Pause, Square, Zap, BatteryFull, Settings, Wifi, WifiOff } from "lucide-react";
+import { Activity, Eye, EyeOff, FileText, Flame, Gauge, Play, Pause, Square, Zap, BatteryFull, Settings, Wifi, WifiOff } from "lucide-react";
 import MetricCard from "../components/MetricCard";
 import TelemetryChartCard from "../components/TelemetryChartCard";
 import ConfigurationModal from "../components/ConfigurationModal";
@@ -20,10 +20,81 @@ const ZERO_READING = {
   status: "healthy"
 };
 
+const GLOBAL_CHART_TYPES = [
+  { key: "line", label: "Line" },
+  { key: "area", label: "Area" },
+  { key: "scatter", label: "Scatter" },
+  { key: "bar", label: "Bar" }
+];
+
+const GLOBAL_METRICS = [
+  { title: "Voltage Trend", metricKey: "voltage", unit: "V", color: "#2563eb" },
+  { title: "Current Load", metricKey: "current", unit: "A", color: "#db2777" },
+  { title: "Thermal Profile", metricKey: "temperature", unit: "C", color: "#dc2626" },
+  { title: "Power Consumption", metricKey: "power", unit: "W", color: "#7c3aed" },
+  { title: "State of Charge", metricKey: "soc", unit: "%", color: "#15915b", forceYRange: { min: 0, max: 100 } },
+  { title: "State of Health", metricKey: "soh", unit: "%", color: "#0f766e", forceYRange: { min: 0, max: 100 } }
+];
+
 function isRealPiReading(reading) {
   if (!reading) return false;
   if (reading.timestamp) return true;
   return [reading.voltage, reading.current, reading.temperature].some((value) => Number(value) !== 0);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatReportNumber(value, digits = 2) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(digits) : "0.00";
+}
+
+function buildReportLineChart(readings, metricKey, label, unit, color = "#2563eb") {
+  const chartWidth = 680;
+  const chartHeight = 190;
+  const padX = 44;
+  const padY = 28;
+  const values = readings.map((row) => Number(row?.[metricKey])).filter(Number.isFinite);
+  if (values.length === 0) {
+    return `<div class="report-chart-empty">No ${escapeHtml(label)} data available.</div>`;
+  }
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const points = readings
+    .map((row, index) => {
+      const value = Number(row?.[metricKey]);
+      if (!Number.isFinite(value)) return null;
+      const x = padX + (index / Math.max(1, readings.length - 1)) * (chartWidth - padX * 2);
+      const y = chartHeight - padY - ((value - min) / range) * (chartHeight - padY * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .filter(Boolean)
+    .join(" ");
+
+  return `
+    <div class="report-chart-card">
+      <div class="report-chart-head">
+        <strong>${escapeHtml(label)}</strong>
+        <span>Min ${formatReportNumber(min)} ${unit} | Max ${formatReportNumber(max)} ${unit}</span>
+      </div>
+      <svg viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="${escapeHtml(label)} chart">
+        <line x1="${padX}" y1="${chartHeight - padY}" x2="${chartWidth - padX}" y2="${chartHeight - padY}" />
+        <line x1="${padX}" y1="${padY}" x2="${padX}" y2="${chartHeight - padY}" />
+        <text x="${padX}" y="18">${formatReportNumber(max)} ${unit}</text>
+        <text x="${padX}" y="${chartHeight - 6}">${formatReportNumber(min)} ${unit}</text>
+        <polyline points="${points}" style="stroke:${color}" />
+      </svg>
+    </div>
+  `;
 }
 
 function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, activeSession = {}, profiles = [], onStartSession, onEndSession, onPauseSession, piStatus }) {
@@ -49,6 +120,9 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
   const [chargeModalOpen, setChargeModalOpen] = useState(false);
   const [instrumentHidden, setInstrumentHidden] = useState(false);
   const [globalChartsHidden, setGlobalChartsHidden] = useState(false);
+  const [globalChartType, setGlobalChartType] = useState("line");
+  const [globalChartVersion, setGlobalChartVersion] = useState(0);
+  const [focusedMetric, setFocusedMetric] = useState("");
 
   const piConnected = Boolean(piStatus?.connected);
   const liveReadings = Array.isArray(liveStream) ? liveStream : [];
@@ -263,6 +337,154 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
     }
   };
 
+  const handleExportDashboardPdf = () => {
+    const reportReadings = hasLiveTelemetry
+      ? readings
+      : (selectedSession?.readings?.length ? selectedSession.readings : readings);
+    const latestReportPoint = reportReadings.at(-1) ?? activeLivePoint;
+    const reportStatus = activeSessionId
+      ? (controlPaused ? "Paused" : "Running")
+      : selectedSession?.status
+        ? selectedSession.status
+        : "Snapshot";
+    const generatedAt = new Date();
+    const configRows = dashboardConfig.fields
+      .map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`)
+      .join("");
+    const metricRows = [
+      ["Voltage", `${formatReportNumber(latestReportPoint.voltage)} V`],
+      ["Current", `${formatReportNumber(latestReportPoint.current)} A`],
+      ["Temperature", `${formatReportNumber(latestReportPoint.temperature, 1)} C`],
+      ["SOC", `${formatReportNumber(latestReportPoint.soc, 0)}%`],
+      ["SOH", `${formatReportNumber(latestReportPoint.soh, 1)}%`],
+      ["Power", `${formatReportNumber((latestReportPoint.voltage ?? 0) * (latestReportPoint.current ?? 0), 1)} W`]
+    ].map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`).join("");
+    const reportChartHtml = GLOBAL_METRICS
+      .map((metric) => buildReportLineChart(reportReadings, metric.metricKey, metric.title, metric.unit, metric.color))
+      .join("");
+    const measurementRows = reportReadings.map((row, index) => `
+      <tr>
+        <td>${escapeHtml(row.timestamp ? new Date(row.timestamp).toLocaleString() : `T+${Math.round(row.time ?? index)}s`)}</td>
+        <td>${formatReportNumber(row.voltage)}</td>
+        <td>${formatReportNumber(row.current)}</td>
+        <td>${formatReportNumber(row.temperature, 1)}</td>
+        <td>${formatReportNumber(row.soc, 0)}</td>
+        <td>${formatReportNumber(row.soh, 1)}</td>
+        <td>${formatReportNumber(row.power ?? ((row.voltage ?? 0) * (row.current ?? 0)), 1)}</td>
+      </tr>
+    `).join("");
+
+    const reportWindow = window.open("", "_blank", "width=980,height=1200");
+    if (!reportWindow) {
+      window.alert("Allow pop-ups for this site to export the dashboard PDF.");
+      return;
+    }
+
+    reportWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>PowerProbe Dashboard Report</title>
+          <style>
+            @page { size: A4; margin: 16mm; }
+            * { box-sizing: border-box; }
+            body { margin: 0; color: #111827; font-family: Arial, Helvetica, sans-serif; line-height: 1.45; }
+            .report { display: grid; gap: 18px; }
+            .report-header { display: flex; justify-content: space-between; gap: 20px; border-bottom: 3px solid #1d4ed8; padding-bottom: 14px; }
+            .brand { font-size: 24px; font-weight: 800; color: #0f172a; }
+            .subtitle { margin-top: 4px; color: #475569; font-size: 13px; }
+            .meta { text-align: right; font-size: 12px; color: #475569; }
+            .status-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+            .status-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; background: #f8fafc; }
+            .status-card span { display: block; color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+            .status-card strong { display: block; margin-top: 4px; color: #111827; font-size: 14px; }
+            h2 { margin: 0 0 8px; font-size: 15px; color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th, td { border: 1px solid #dbe3ef; padding: 8px; text-align: left; }
+            th { background: #eff6ff; color: #1e3a8a; font-weight: 800; }
+            td { color: #111827; }
+            .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+            .section { break-inside: avoid; }
+            .report-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+            .report-chart-card { break-inside: avoid; border: 1px solid #dbe3ef; border-radius: 8px; padding: 10px; }
+            .report-chart-head { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; font-size: 12px; }
+            .report-chart-head strong { color: #0f172a; }
+            .report-chart-head span { color: #64748b; }
+            .report-chart-card svg { width: 100%; height: auto; display: block; }
+            .report-chart-card line { stroke: #cbd5e1; stroke-width: 1; }
+            .report-chart-card polyline { fill: none; stroke-width: 2.4; }
+            .report-chart-card text { fill: #475569; font-size: 11px; font-weight: 700; }
+            .report-chart-empty { border: 1px dashed #cbd5e1; border-radius: 8px; padding: 20px; color: #64748b; }
+            .measurements-table { font-size: 10px; }
+            .measurements-table th,
+            .measurements-table td { padding: 5px 6px; }
+            .note { padding: 10px 12px; border-left: 4px solid #1d4ed8; background: #eff6ff; color: #1e3a8a; font-size: 12px; }
+            .footer { border-top: 1px solid #cbd5e1; padding-top: 10px; color: #64748b; font-size: 11px; }
+            @media print { .report-charts-grid { grid-template-columns: 1fr 1fr; } }
+            @media print { button { display: none; } }
+          </style>
+        </head>
+        <body>
+          <main class="report">
+            <header class="report-header">
+              <div>
+                <div class="brand">PowerProbe Dashboard Report</div>
+                <div class="subtitle">Battery telemetry, operational state, and configuration snapshot</div>
+              </div>
+              <div class="meta">
+                <div>Generated: ${escapeHtml(generatedAt.toLocaleString())}</div>
+                <div>Report Type: Dashboard PDF Export</div>
+              </div>
+            </header>
+
+            <section class="status-strip">
+              <div class="status-card"><span>Session</span><strong>${escapeHtml(visibleSessionId || selectedSession?.sessionId || "No active session")}</strong></div>
+              <div class="status-card"><span>Status</span><strong>${escapeHtml(reportStatus)}</strong></div>
+              <div class="status-card"><span>Battery</span><strong>${escapeHtml(activeBattery || selectedSession?.batteryId || "Unknown")}</strong></div>
+              <div class="status-card"><span>Source</span><strong>${escapeHtml(hasPiTelemetry ? "Raspberry Pi" : hasDemoTelemetry ? "Demo fallback" : selectedSession?.sourceFile || "Dashboard snapshot")}</strong></div>
+            </section>
+
+            <section class="two-col">
+              <div class="section">
+                <h2>Applied Configuration</h2>
+                <table>${configRows}</table>
+              </div>
+              <div class="section">
+                <h2>Latest Measurements</h2>
+                <table>${metricRows}</table>
+              </div>
+            </section>
+
+            <section class="section">
+              <h2>Dashboard Charts</h2>
+              <div class="report-charts-grid">${reportChartHtml}</div>
+            </section>
+
+            <section class="section">
+              <h2>All Measurements To Download Time</h2>
+              <table class="measurements-table">
+                <thead>
+                  <tr><th>Time</th><th>Voltage (V)</th><th>Current (A)</th><th>Temp (C)</th><th>SOC (%)</th><th>SOH (%)</th><th>Power (W)</th></tr>
+                </thead>
+                <tbody>${measurementRows || `<tr><td colspan="7">No telemetry samples available.</td></tr>`}</tbody>
+              </table>
+            </section>
+
+            <p class="note">This report is generated from the current PowerProbe dashboard state. Validate SOC, SOH, and RUL indicators against approved battery models before production use.</p>
+            <footer class="footer">PowerProbe | Team 6 | Internal battery analytics report</footer>
+          </main>
+          <script>
+            window.onload = () => {
+              window.focus();
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    reportWindow.document.close();
+  };
+
   return (
     <section className="dashboard-page">
       <div className="dashboard-top-section">
@@ -283,6 +505,16 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
           >
             <Settings size={18} />
             Configuration
+          </button>
+
+          <button
+            className="btn-export-pdf"
+            onClick={handleExportDashboardPdf}
+            title="Export dashboard report as PDF"
+            type="button"
+          >
+            <FileText size={18} />
+            Export PDF
           </button>
 
           <button
@@ -413,7 +645,38 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
 
         {!globalChartsHidden && (
           <>
-        <div className="chart-row-two-cols">
+        <div className="global-chart-toolbar" aria-label="Global chart type">
+          <span>Global chart type</span>
+          <div className="global-chart-buttons">
+            {GLOBAL_CHART_TYPES.map((type) => (
+              <button
+                key={type.key}
+                type="button"
+                className={globalChartType === type.key ? "active" : ""}
+                onClick={() => {
+                  setGlobalChartType(type.key);
+                  setGlobalChartVersion((version) => version + 1);
+                }}
+              >
+                {type.label}
+              </button>
+            ))}
+          </div>
+          {focusedMetric && (
+            <button className="clear-focused-chart" type="button" onClick={() => setFocusedMetric("")}>
+              Show all charts
+            </button>
+          )}
+        </div>
+
+        {focusedMetric && (
+          <p className="focused-chart-note">
+            Showing one selected global telemetry chart with the instrument panel readings above.
+          </p>
+        )}
+
+        <div className={`chart-row-two-cols ${focusedMetric ? "focused-chart-grid" : ""}`}>
+          {(!focusedMetric || focusedMetric === "voltage") && (
           <TelemetryChartCard
             title="Voltage Trend"
             metricKey="voltage"
@@ -422,7 +685,12 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             operationMode={operationMode}
             compact
             showToggles
+            controlledChartType={`${globalChartType}:${globalChartVersion}`}
+            onSelectChart={setFocusedMetric}
+            focused={focusedMetric === "voltage"}
           />
+          )}
+          {(!focusedMetric || focusedMetric === "current") && (
           <TelemetryChartCard
             title="Current Load"
             metricKey="current"
@@ -431,10 +699,15 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             operationMode={operationMode}
             compact
             showToggles
+            controlledChartType={`${globalChartType}:${globalChartVersion}`}
+            onSelectChart={setFocusedMetric}
+            focused={focusedMetric === "current"}
           />
+          )}
         </div>
 
-        <div className="chart-row-two-cols">
+        <div className={`chart-row-two-cols ${focusedMetric ? "focused-chart-grid" : ""}`}>
+          {(!focusedMetric || focusedMetric === "temperature") && (
           <TelemetryChartCard
             title="Thermal Profile"
             metricKey="temperature"
@@ -443,7 +716,12 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             operationMode={operationMode}
             compact
             showToggles
+            controlledChartType={`${globalChartType}:${globalChartVersion}`}
+            onSelectChart={setFocusedMetric}
+            focused={focusedMetric === "temperature"}
           />
+          )}
+          {(!focusedMetric || focusedMetric === "power") && (
           <TelemetryChartCard
             title="Power Consumption"
             metricKey="power"
@@ -452,10 +730,15 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             operationMode={operationMode}
             compact
             showToggles
+            controlledChartType={`${globalChartType}:${globalChartVersion}`}
+            onSelectChart={setFocusedMetric}
+            focused={focusedMetric === "power"}
           />
+          )}
         </div>
 
-        <div className="chart-row-two-cols">
+        <div className={`chart-row-two-cols ${focusedMetric ? "focused-chart-grid" : ""}`}>
+          {(!focusedMetric || focusedMetric === "soc") && (
           <TelemetryChartCard
             title="State of Charge"
             metricKey="soc"
@@ -465,7 +748,12 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             operationMode={operationMode}
             compact
             showToggles
+            controlledChartType={`${globalChartType}:${globalChartVersion}`}
+            onSelectChart={setFocusedMetric}
+            focused={focusedMetric === "soc"}
           />
+          )}
+          {(!focusedMetric || focusedMetric === "soh") && (
           <TelemetryChartCard
             title="State of Health"
             metricKey="soh"
@@ -475,7 +763,11 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             operationMode={operationMode}
             compact
             showToggles
+            controlledChartType={`${globalChartType}:${globalChartVersion}`}
+            onSelectChart={setFocusedMetric}
+            focused={focusedMetric === "soh"}
           />
+          )}
         </div>
           </>
         )}

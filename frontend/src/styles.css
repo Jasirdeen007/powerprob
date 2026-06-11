@@ -34,26 +34,26 @@
 }
 
 :root[data-theme='dark'] {
-  --bg-main: #0b1220;
-  --bg-surface: #151f32;
-  --bg-secondary: #0b1220;
-  --bg-elevated: #1e2d45;
-  --bg-light: #1e293b;
-  --bg-lighter: #334155;
-  --bg-hover: #334155;
-  --border: #334155;
+  --bg-main: #090d16;
+  --bg-surface: #111827;
+  --bg-secondary: #0f172a;
+  --bg-elevated: #1b2435;
+  --bg-light: #172033;
+  --bg-lighter: #243047;
+  --bg-hover: #26344d;
+  --border: #2d3a52;
   
   --text-main: #f8fafc;
-  --text-muted: #cbd5e1;
-  --text-light: #94a3b8;
+  --text-muted: #d4deec;
+  --text-light: #a8b4c7;
   
-  --border-main: #334155;
-  --border-strong: #475569;
-  --border-light: #1e293b;
+  --border-main: #2d3a52;
+  --border-strong: #52637c;
+  --border-light: #1b2435;
   
-  --brand-primary: #3b82f6;
-  --brand-secondary: #60a5fa;
-  --brand-gradient: linear-gradient(135deg, #3b82f6, #60a5fa);
+  --brand-primary: #60a5fa;
+  --brand-secondary: #93c5fd;
+  --brand-gradient: linear-gradient(135deg, #2563eb, #60a5fa);
   
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
@@ -2577,7 +2577,8 @@ h3 {
   justify-content: flex-end;
 }
 
-.btn-configuration {
+.btn-configuration,
+.btn-export-pdf {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2592,10 +2593,22 @@ h3 {
   transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
-.btn-configuration:hover {
+.btn-configuration:hover,
+.btn-export-pdf:hover {
   background: #f8fafc;
   border-color: #cbd5e1;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.btn-export-pdf {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.btn-export-pdf:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
 }
 
 .btn-run, .btn-pause, .btn-stop {
@@ -2670,12 +2683,23 @@ h3 {
 
 .session-info {
   padding: 12px 16px;
-  background: #e8f5e9;
-  border: 1px solid #c8e6c9;
+  background: linear-gradient(135deg, rgba(21, 145, 91, 0.14), var(--bg-surface));
+  border: 1px solid rgba(21, 145, 91, 0.32);
   border-radius: 8px;
-  color: #1b5e20;
+  color: var(--text-main);
   font-size: 13px;
+  font-weight: 700;
   margin-bottom: 16px;
+}
+
+.session-info p {
+  margin: 0;
+  color: inherit;
+}
+
+.session-info strong {
+  color: #0f8a50;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
 }
 
 .dashboard-config-summary {
@@ -2860,6 +2884,63 @@ h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 14px;
+}
+
+.chart-row-two-cols.focused-chart-grid {
+  grid-template-columns: 1fr;
+}
+
+.global-chart-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-main);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.global-chart-toolbar > span {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.global-chart-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.global-chart-buttons button,
+.clear-focused-chart {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-main);
+  border-radius: 7px;
+  background: var(--bg-surface);
+  color: var(--text-main);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.global-chart-buttons button.active {
+  border-color: var(--brand-primary);
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--brand-primary);
+}
+
+.clear-focused-chart {
+  margin-left: auto;
+}
+
+.focused-chart-note {
+  margin: -4px 0 12px;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
 }
 
 .chart-row-three-cols {
@@ -4615,6 +4696,16 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   height: 280px;
 }
 
+.telemetry-chart-card[role="button"] {
+  cursor: pointer;
+}
+
+.telemetry-chart-card.focused {
+  min-height: 420px;
+  border-color: var(--brand-primary);
+  box-shadow: 0 18px 38px rgba(37, 99, 235, 0.16);
+}
+
 .telemetry-chart-card .chart-container {
   flex: 1;
   min-height: 0;
@@ -4737,6 +4828,9 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 :root[data-theme='dark'] .dashboard-top-section,
 :root[data-theme='dark'] .instrument-panel-header,
 :root[data-theme='dark'] .metric,
+:root[data-theme='dark'] .dashboard-config-summary,
+:root[data-theme='dark'] .dashboard-config-item,
+:root[data-theme='dark'] .pi-status-banner,
 :root[data-theme='dark'] .dashboard-charts,
 :root[data-theme='dark'] .chart-panel,
 :root[data-theme='dark'] .stat-card,
@@ -4746,6 +4840,159 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 :root[data-theme='dark'] .config-modal {
   background: var(--bg-surface) !important;
   border-color: var(--border-main) !important;
+}
+
+:root[data-theme='dark'] .dashboard-top-section,
+:root[data-theme='dark'] .instrument-panel-header,
+:root[data-theme='dark'] .dashboard-config-summary,
+:root[data-theme='dark'] .pi-status-banner,
+:root[data-theme='dark'] .telemetry-chart-card,
+:root[data-theme='dark'] .custom-chart-builder,
+:root[data-theme='dark'] .custom-chart-panel {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme='dark'] .dashboard-title-area h1,
+:root[data-theme='dark'] .instrument-panel-header h2,
+:root[data-theme='dark'] .global-charts-head h2,
+:root[data-theme='dark'] .telemetry-chart-title,
+:root[data-theme='dark'] .metric strong,
+:root[data-theme='dark'] .dashboard-config-summary h2,
+:root[data-theme='dark'] .dashboard-config-item strong,
+:root[data-theme='dark'] .custom-chart-section-head h2,
+:root[data-theme='dark'] .custom-chart-panel-head h3 {
+  color: #f8fafc !important;
+}
+
+:root[data-theme='dark'] .dashboard-title-area p,
+:root[data-theme='dark'] .instrument-panel-header p,
+:root[data-theme='dark'] .global-charts-head p,
+:root[data-theme='dark'] .dashboard-config-eyebrow,
+:root[data-theme='dark'] .dashboard-config-item span,
+:root[data-theme='dark'] .pi-status-main span,
+:root[data-theme='dark'] .custom-chart-section-head p {
+  color: var(--text-muted) !important;
+}
+
+:root[data-theme='dark'] .metric {
+  background: linear-gradient(180deg, #131d2d, #101827) !important;
+}
+
+:root[data-theme='dark'] .metric.good .metric-icon {
+  background: rgba(52, 211, 153, 0.16) !important;
+  color: #86efac !important;
+}
+
+:root[data-theme='dark'] .metric.warn .metric-icon {
+  background: rgba(251, 191, 36, 0.18) !important;
+  color: #fde68a !important;
+}
+
+:root[data-theme='dark'] .metric.danger .metric-icon {
+  background: rgba(248, 113, 113, 0.18) !important;
+  color: #fca5a5 !important;
+}
+
+:root[data-theme='dark'] .btn-configuration,
+:root[data-theme='dark'] .btn-pause,
+:root[data-theme='dark'] .btn-stop,
+:root[data-theme='dark'] .btn-export-pdf {
+  background: #172033 !important;
+  border-color: #3a4a64 !important;
+  color: #e5edf8 !important;
+}
+
+:root[data-theme='dark'] .btn-export-pdf {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.28), rgba(96, 165, 250, 0.16)) !important;
+  border-color: rgba(147, 197, 253, 0.46) !important;
+  color: #dbeafe !important;
+}
+
+:root[data-theme='dark'] .btn-run {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+  color: #ffffff !important;
+}
+
+:root[data-theme='dark'] .btn-stop {
+  color: #fecaca !important;
+}
+
+:root[data-theme='dark'] .btn-configuration:hover,
+:root[data-theme='dark'] .btn-pause:hover:not(:disabled),
+:root[data-theme='dark'] .btn-stop:hover:not(:disabled),
+:root[data-theme='dark'] .btn-export-pdf:hover {
+  background: #22304a !important;
+  border-color: #6b7d97 !important;
+}
+
+:root[data-theme='dark'] .global-chart-toolbar {
+  background: #111827 !important;
+  border-color: #2d3a52 !important;
+}
+
+:root[data-theme='dark'] .global-chart-buttons button,
+:root[data-theme='dark'] .clear-focused-chart {
+  background: #172033 !important;
+  border-color: #3a4a64 !important;
+  color: #e5edf8 !important;
+}
+
+:root[data-theme='dark'] .global-chart-buttons button.active,
+:root[data-theme='dark'] .clear-focused-chart:hover {
+  background: rgba(96, 165, 250, 0.18) !important;
+  border-color: rgba(147, 197, 253, 0.5) !important;
+  color: #dbeafe !important;
+}
+
+:root[data-theme='dark'] .telemetry-chart-card.focused {
+  border-color: rgba(147, 197, 253, 0.7) !important;
+  box-shadow: 0 20px 44px rgba(37, 99, 235, 0.22);
+}
+
+:root[data-theme='dark'] .session-info {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.16), rgba(17, 24, 39, 0.96)) !important;
+  border-color: rgba(74, 222, 128, 0.42) !important;
+  color: #dcfce7 !important;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-theme='dark'] .session-info p {
+  color: #dcfce7 !important;
+}
+
+:root[data-theme='dark'] .session-info strong {
+  color: #86efac !important;
+}
+
+:root[data-theme='dark'] .session-error {
+  background: rgba(127, 29, 29, 0.28) !important;
+  border-color: rgba(248, 113, 113, 0.34) !important;
+  color: #fecaca !important;
+}
+
+:root[data-theme='dark'] .status-badge.healthy {
+  background: rgba(34, 197, 94, 0.16) !important;
+  color: #bbf7d0 !important;
+}
+
+:root[data-theme='dark'] .status-badge.warning {
+  background: rgba(245, 158, 11, 0.18) !important;
+  color: #fde68a !important;
+}
+
+:root[data-theme='dark'] .status-badge.critical {
+  background: rgba(248, 113, 113, 0.18) !important;
+  color: #fecaca !important;
+}
+
+:root[data-theme='dark'] .pi-status-banner.connected {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), #111827) !important;
+  border-color: rgba(74, 222, 128, 0.32) !important;
+}
+
+:root[data-theme='dark'] .pi-status-banner.unavailable {
+  background: linear-gradient(135deg, rgba(248, 113, 113, 0.12), #111827) !important;
+  border-color: rgba(248, 113, 113, 0.28) !important;
 }
 
 /* History table and mode badge visibility in dark theme */

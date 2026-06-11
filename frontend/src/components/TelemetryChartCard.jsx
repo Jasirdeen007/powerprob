@@ -124,7 +124,10 @@ function TelemetryChartCard({
   operationMode = "discharge",
   compact = false,
   showToggles = true,
-  autoFollowLatest = true
+  autoFollowLatest = true,
+  controlledChartType,
+  onSelectChart,
+  focused = false
 }) {
   const chartRef = useRef(null);
   const scrollRef = useRef(null);
@@ -137,6 +140,12 @@ function TelemetryChartCard({
   useEffect(() => {
     setActiveChart(getDefaultChartType(metricKey));
   }, [metricKey]);
+
+  useEffect(() => {
+    if (controlledChartType) {
+      setActiveChart(String(controlledChartType).split(":")[0]);
+    }
+  }, [controlledChartType]);
 
   const processedData = useMemo(() => data.map((d) => ({
     ...d,
@@ -343,7 +352,23 @@ function TelemetryChartCard({
     || ((activeChart === "gauge" || activeChart === "donut") && processedData.length === 0);
 
   return (
-    <div className={`telemetry-chart-card panel ${compact ? "compact" : ""}`}>
+    <div
+      className={`telemetry-chart-card panel ${compact ? "compact" : ""} ${focused ? "focused" : ""}`}
+      onClick={(event) => {
+        if (!onSelectChart) return;
+        if (event.target.closest("button, a, input, select, textarea")) return;
+        onSelectChart(metricKey);
+      }}
+      role={onSelectChart ? "button" : undefined}
+      tabIndex={onSelectChart ? 0 : undefined}
+      onKeyDown={(event) => {
+        if (!onSelectChart) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelectChart(metricKey);
+        }
+      }}
+    >
       <div className="panel-head telemetry-chart-head">
         <div>
           <h3 className="telemetry-chart-title">{capitalize(title)}</h3>
