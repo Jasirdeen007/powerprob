@@ -5,65 +5,144 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PowerProbe Help Documentation</title>
     <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0b1220;
+        --panel: #11192b;
+        --panel-2: #18243b;
+        --text: #e5eefc;
+        --muted: #9fb1cc;
+        --accent: #60a5fa;
+        --line: rgba(148, 163, 184, 0.2);
+      }
       body {
         margin: 0;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #f7fafc;
-        color: #172033;
-        line-height: 1.6;
+        font-family: Segoe UI, Roboto, Arial, sans-serif;
+        background: radial-gradient(circle at top, #172033, var(--bg) 55%);
+        color: var(--text);
       }
       main {
-        width: min(880px, calc(100% - 32px));
+        max-width: 980px;
         margin: 0 auto;
-        padding: 40px 0;
+        padding: 32px 18px 56px;
       }
-      h1, h2 {
-        line-height: 1.2;
+      .hero {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(17,25,43,0.98), rgba(15,23,42,0.96));
+        padding: 26px;
+        box-shadow: 0 18px 40px rgba(0,0,0,0.35);
       }
-      section {
-        margin-top: 24px;
-        padding: 22px;
-        border: 1px solid #dbe5f3;
-        border-radius: 10px;
-        background: #ffffff;
+      h1 { margin: 0 0 8px; font-size: 2rem; }
+      .lead { margin: 0; color: var(--muted); line-height: 1.7; }
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        margin-top: 18px;
       }
-      code {
-        padding: 2px 5px;
-        border-radius: 5px;
-        background: #edf2f7;
+      section.card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: linear-gradient(180deg, var(--panel), var(--panel-2));
+        padding: 18px;
       }
-      a {
-        color: #2563eb;
+      h2 { margin: 0 0 10px; font-size: 1.05rem; }
+      ul { margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.75; }
+      .steps { display: grid; gap: 12px; margin-top: 16px; }
+      .step {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px 16px;
+        background: rgba(255,255,255,0.03);
+      }
+      .step strong { display: block; margin-bottom: 6px; color: var(--text); }
+      .footer {
+        margin-top: 20px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 14px;
+      }
+      .exit {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(96, 165, 250, 0.35);
+        background: rgba(96, 165, 250, 0.16);
+        color: var(--text);
+        text-decoration: none;
         font-weight: 700;
+        cursor: pointer;
       }
+      code { color: #bfdbfe; }
     </style>
   </head>
   <body>
     <main>
-      <h1>PowerProbe Help Documentation</h1>
-      <p>Use this quick guide to operate the dashboard. The full project manual is available in the repository at <code>frontend/docs/README.md</code> and <code>WORKING_MANUAL.md</code>.</p>
+      <div class="actions">
+        <button
+          class="exit"
+          type="button"
+          onclick="if (window.parent && window.parent !== window) { window.parent.postMessage({ type: 'powerprobe:close-help' }, window.location.origin); } else { window.location.href = '/'; }"
+        >
+          Exit Help
+        </button>
+      </div>
+      <div class="hero">
+        <h1>PowerProbe Help Documentation</h1>
+        <p class="lead">A quick operating guide for live battery telemetry, configuration, and historical review.</p>
 
-      <section>
-        <h2>Run A Test</h2>
-        <ol>
-          <li>Open Dashboard.</li>
-          <li>Use Configuration to set charge or discharge values.</li>
-          <li>Click Run to start a Pi-backed session. If the Pi is unavailable, bundled demo telemetry runs automatically.</li>
-          <li>Click Stop to end the session and reset live values to zero.</li>
-        </ol>
-      </section>
+        <div class="grid">
+          <section class="card">
+            <h2>Getting Started</h2>
+            <ul>
+              <li>Sign in with your approved account.</li>
+              <li>Open the dashboard to configure the battery profile.</li>
+              <li>Use Run, Pause, and Stop to control a session.</li>
+            </ul>
+          </section>
+          <section class="card">
+            <h2>Monitoring</h2>
+            <ul>
+              <li>Watch live voltage, current, temperature, SOC, SOH, and power.</li>
+              <li>Focus a chart to inspect one metric in detail.</li>
+              <li>Use the global chart-type selector to switch every telemetry chart.</li>
+            </ul>
+          </section>
+          <section class="card">
+            <h2>History</h2>
+            <ul>
+              <li>Move to History Analytics to review completed sessions.</li>
+              <li>Use All or Custom filters to narrow the record list.</li>
+              <li>Export records when needed for reporting or audit trails.</li>
+            </ul>
+          </section>
+        </div>
 
-      <section>
-        <h2>Review History</h2>
-        <p>Open History Analytics to filter completed sessions by battery, mode, and date range. Charts and exports update from the filtered selection.</p>
-      </section>
+        <div class="steps">
+          <div class="step">
+            <strong>1. Configure the battery</strong>
+            Select chemistry, capacity, cell count, and operating profile before starting a run.
+          </div>
+          <div class="step">
+            <strong>2. Start a session</strong>
+            Click Run to begin telemetry capture. While the session is active, live readings and exports stay available.
+          </div>
+          <div class="step">
+            <strong>3. Review results</strong>
+            Switch to History Analytics to inspect trends from completed sessions and compare against previous runs.
+          </div>
+        </div>
 
-      <section>
-        <h2>Services</h2>
-        <p>Frontend: <code>http://127.0.0.1:5173</code></p>
-        <p>Backend: <code>http://127.0.0.1:8001</code></p>
-        <p>Backend API docs: <code>http://127.0.0.1:8001/docs</code></p>
-      </section>
+        <p class="footer">PowerProbe is built for battery telemetry, operational traceability, and practical session review.</p>
+      </div>
     </main>
   </body>
 </html>

@@ -36,6 +36,38 @@ const GLOBAL_METRICS = [
   { title: "State of Health", metricKey: "soh", unit: "%", color: "#0f766e", forceYRange: { min: 0, max: 100 } }
 ];
 
+function getMetricTone(metricKey, value, operationMode = "discharge") {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "good";
+  if (metricKey === "temperature") {
+    if (operationMode === "charge") {
+      if (n > 45) return "danger";
+      if (n > 40) return "warn";
+      return n >= 0 ? "good" : "neutral";
+    }
+    if (n > 60) return "danger";
+    if (n >= 50) return "warn";
+    return n >= 20 ? "good" : "warn";
+  }
+  if (metricKey === "voltage") {
+    if (n > 4.2) return "warn";
+    if (n < 3.2) return "danger";
+    if (n < 3.5) return "warn";
+    return "good";
+  }
+  if (metricKey === "soc") {
+    if (n <= 15) return "danger";
+    if (n <= 25) return "warn";
+    return "good";
+  }
+  if (metricKey === "soh") {
+    if (n < 70) return "danger";
+    if (n < 80) return "warn";
+    return "good";
+  }
+  return "good";
+}
+
 function isRealPiReading(reading) {
   if (!reading) return false;
   if (reading.timestamp) return true;
@@ -236,7 +268,11 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
   const focusedMetricAverage = focusedMetricValues.length
     ? focusedMetricValues.reduce((total, value) => total + value, 0) / focusedMetricValues.length
     : 0;
-  const tone = activeLivePoint.status === "critical" ? "danger" : activeLivePoint.status === "warning" ? "warn" : "good";
+  const temperatureTone = getMetricTone("temperature", activeLivePoint.temperature, operationMode);
+  const voltageTone = getMetricTone("voltage", activeLivePoint.voltage, operationMode);
+  const socTone = getMetricTone("soc", readings[readings.length - 1]?.soc ?? activeLivePoint.soc, operationMode);
+  const sohTone = getMetricTone("soh", readings[readings.length - 1]?.soh ?? activeLivePoint.soh, operationMode);
+  const tone = temperatureTone === "danger" ? "danger" : temperatureTone === "warn" ? "warn" : "good";
   const PiStatusIcon = piConnected ? Wifi : WifiOff;
   const piStatusLabel = hasDemoTelemetry
     ? "Demo data running"
@@ -619,14 +655,14 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
       {!instrumentHidden && (
         <>
       <div className="metrics-row">
-        <MetricCard icon={Zap} label="Voltage" value={`${activeLivePoint.voltage.toFixed(2)} V`} detail="active bus" tone="good" />
+        <MetricCard icon={Zap} label="Voltage" value={`${activeLivePoint.voltage.toFixed(2)} V`} detail="active bus" tone={voltageTone} />
         <MetricCard icon={Activity} label="Current" value={`${activeLivePoint.current.toFixed(2)} A`} detail="realtime draw" tone="good" />
         <MetricCard icon={Flame} label="Temperature" value={`${activeLivePoint.temperature.toFixed(1)} °C`} detail="thermal state" tone={tone} />
       </div>
 
       <div className="metrics-row">
-        <MetricCard icon={BatteryFull} label="SOC" value={`${(readings[readings.length - 1]?.soc ?? 100)}%`} detail="charge level" tone="good" />
-        <MetricCard icon={Gauge} label="SOH" value={`${(readings[readings.length - 1]?.soh ?? 100.0).toFixed(1)}%`} detail="health status" tone="good" />
+        <MetricCard icon={BatteryFull} label="SOC" value={`${(readings[readings.length - 1]?.soc ?? 100)}%`} detail="charge level" tone={socTone} />
+        <MetricCard icon={Gauge} label="SOH" value={`${(readings[readings.length - 1]?.soh ?? 100.0).toFixed(1)}%`} detail="health status" tone={sohTone} />
         <MetricCard icon={Zap} label="Power" value={`${powerValue.toFixed(1)} W`} detail="power draw" tone="good" />
       </div>
         </>
@@ -636,10 +672,8 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
         <div className="global-charts-head section-toggle-head">
           <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
             <h2>Global Telemetry</h2>
-            {!hasLiveTelemetry && <span className="demo-badge">Waiting for Pi data</span>}
           </div>
           <div className="section-header-actions">
-            <p>Six live charts — axes adapt to {operationMode} operating range</p>
             <button
               className="section-hide-button"
               type="button"

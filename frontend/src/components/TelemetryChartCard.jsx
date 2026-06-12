@@ -54,24 +54,29 @@ const COLORS = {
 
 function getStatusColor(metric, value) {
   if (metric === "temperature") {
-    if (value < 30) return COLORS.stable;
-    if (value < 38) return COLORS.safe;
-    if (value < 42) return COLORS.warning;
-    if (value < 45) return COLORS.attention;
+    if (value < 45) return COLORS.safe;
+    if (value < 50) return COLORS.stable;
+    if (value < 55) return COLORS.warning;
+    if (value < 60) return COLORS.attention;
     return COLORS.critical;
   }
   if (metric === "voltage") {
-    if (value > 4.1) return COLORS.warning;
-    if (value > 3.6) return COLORS.safe;
-    if (value > 3.4) return COLORS.stable;
-    if (value >= 3.25) return COLORS.attention;
+    if (value > 4.2) return COLORS.warning;
+    if (value >= 3.7) return COLORS.safe;
+    if (value >= 3.5) return COLORS.warning;
+    if (value >= 3.2) return COLORS.critical;
     return COLORS.critical;
   }
   if (metric === "soc" || metric === "soh") {
+    if (metric === "soc") {
+      if (value > 25) return COLORS.safe;
+      if (value > 15) return COLORS.warning;
+      if (value > 10) return COLORS.attention;
+      return COLORS.critical;
+    }
     if (value > 80) return COLORS.safe;
-    if (value > 50) return COLORS.stable;
-    if (value > 20) return COLORS.warning;
-    if (value > 10) return COLORS.attention;
+    if (value > 70) return COLORS.warning;
+    if (value > 50) return COLORS.attention;
     return COLORS.critical;
   }
   return COLORS.stable;
@@ -374,7 +379,6 @@ function TelemetryChartCard({
           <h3 className="telemetry-chart-title">{capitalize(title)}</h3>
           <div className="telemetry-chart-meta">
             <span className="telemetry-chart-icon"><BarChart3 size={13} /></span>
-            <span className="telemetry-chart-range">{buildAxisLabel(metricKey, yDomain)}</span>
             <span className="telemetry-chart-value" style={{ color: statusColor }} title={latestDisplay}>
               {latestValue.toFixed(isPercent ? 0 : 2)}{isPercent ? "%" : ` ${unit}`}
             </span>

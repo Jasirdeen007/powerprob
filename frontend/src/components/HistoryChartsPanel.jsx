@@ -89,17 +89,17 @@ export default function HistoryChartsPanel({ records, batteries = [] }) {
           <span>{filteredRecords.length} readings | {batterySummary}</span>
         </div>
         <div className="history-chart-filter">
-            <label>
-              Battery trend
-              <select value={activeBatteryId} onChange={(event) => setSelectedBatteryId(event.target.value)}>
-                {batteryList.map((battery) => (
-                  <option key={battery.batteryId} value={battery.batteryId}>
-                    {battery.batteryName ? `${battery.batteryName} (${battery.batteryId})` : battery.batteryId}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <label>
+            Battery trend
+            <select value={activeBatteryId} onChange={(event) => setSelectedBatteryId(event.target.value)}>
+              {batteryList.map((battery) => (
+                <option key={battery.batteryId} value={battery.batteryId}>
+                  {battery.batteryName ? `${battery.batteryName} (${battery.batteryId})` : battery.batteryId}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       <ChartSet records={filteredRecords} />

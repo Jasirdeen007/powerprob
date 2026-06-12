@@ -1021,7 +1021,7 @@ h3 {
   display: grid;
   grid-template-columns: 1.2fr 1.8fr 0.8fr;
   gap: 20px;
-  background: linear-gradient(135deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(135deg, #f7fbff 0%, #eef5ff 100%);
   box-shadow: var(--shadow-sm);
   transition: var(--transition);
   cursor: default;
@@ -1057,7 +1057,7 @@ h3 {
   background: var(--bg-surface);
   border: 1px solid var(--border-main);
   border-radius: 12px;
-  transition: var(--transition);
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, color 180ms ease, filter 180ms ease;
 }
 
 .metric {
@@ -1067,6 +1067,7 @@ h3 {
   min-height: 116px;
   position: relative;
   overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(239,244,255,0.96));
 }
 
 .metric-icon {
@@ -1078,11 +1079,19 @@ h3 {
   background: #eaf0ff;
   color: #2451cc;
   flex-shrink: 0;
-  transition: var(--transition);
+  transition: transform 180ms ease, background-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
 }
 
 .metric:hover .metric-icon {
-  transform: scale(1.08);
+  transform: scale(1.06);
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.14);
+}
+
+.metric:hover {
+  transform: translateY(-3px);
+  border-color: rgba(59,130,246,0.28);
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.12);
+  filter: saturate(1.02);
 }
 
 .metric strong {
@@ -1157,16 +1166,18 @@ h3 {
 
 .panel {
   padding: 20px;
-  background: var(--bg-surface);
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(246,249,255,0.96));
   border: 1px solid var(--border-main);
   border-radius: 12px;
   box-shadow: var(--shadow-sm);
-  transition: var(--transition);
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, filter 180ms ease;
 }
 
 .panel:hover {
-  border-color: #cbd5e1;
-  box-shadow: var(--shadow-md);
+  border-color: var(--brand-secondary);
+  box-shadow: 0 18px 36px rgba(37, 99, 235, 0.12);
+  transform: translateY(-2px);
+  filter: saturate(1.02);
 }
 
 .panel.wide {
@@ -1194,7 +1205,7 @@ h3 {
   font-size: 13px;
   font-weight: 600;
   color: #64748b;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #f8fbff, #eaf2ff);
   padding: 6px 12px;
   border-radius: 8px;
 }
@@ -2165,7 +2176,7 @@ h3 {
   align-items: flex-start;
   gap: 20px;
   margin-bottom: 20px;
-  background: var(--bg-surface);
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(240,246,255,0.96));
   border: 1px solid var(--border-main);
   border-radius: 12px;
   padding: 20px 24px;
@@ -2694,12 +2705,22 @@ h3 {
   gap: 12px;
 }
 
-.app-footer-links a {
+.app-footer-links a,
+.app-footer-link-button {
   color: #93c5fd;
   text-decoration: none;
 }
 
-.app-footer-links a:hover {
+.app-footer-link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.app-footer-links a:hover,
+.app-footer-link-button:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -2884,8 +2905,9 @@ h3 {
   margin-bottom: 20px;
   border: 1px solid var(--border-main);
   border-radius: 10px;
-  background: var(--bg-surface);
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(242,247,255,0.96));
   box-shadow: 0 16px 28px rgba(15, 23, 42, 0.05);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
   position: sticky;
   top: 72px;
   z-index: 40;
@@ -2919,6 +2941,7 @@ h3 {
   border: 1px solid var(--border-light);
   border-radius: 8px;
   background: var(--bg-secondary);
+  transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
 }
 
 .dashboard-config-item span {
@@ -2939,8 +2962,11 @@ h3 {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-main);
+  padding: 14px 16px 16px;
+  border: 1px solid var(--border-main);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(239,245,255,0.96));
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
 }
 
 .instrument-panel-header h2 {
@@ -2962,7 +2988,7 @@ h3 {
   margin-bottom: 20px;
   border: 1px solid var(--border-main);
   border-radius: 10px;
-  background: var(--bg-surface);
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(243,248,255,0.92));
   box-shadow: var(--shadow-sm);
 }
 
@@ -4470,6 +4496,7 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   border: 1px solid var(--border-main);
   border-radius: 10px;
   padding: 14px 16px;
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .history-filter-battery {
@@ -4504,6 +4531,34 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   color: var(--text-main);
 }
 
+.history-filter-block input[type="date"] {
+  min-height: 48px;
+  padding-right: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.99), rgba(240,246,255,0.96));
+  border-color: rgba(96,165,250,0.5);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5), 0 1px 2px rgba(15,23,42,0.04);
+  color-scheme: light;
+  cursor: pointer;
+}
+
+.history-filter-block input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  padding: 4px;
+  margin-left: 6px;
+  border-radius: 6px;
+  background: rgba(96,165,250,0.12);
+  filter: saturate(1.1) brightness(0.9);
+}
+
+.history-filter-block input[type="date"]::-webkit-datetime-edit,
+.history-filter-block input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.history-filter-block input[type="date"]::-webkit-datetime-edit-text {
+  color: var(--text-main);
+}
+
 .history-filter-block-head {
   display: flex;
   justify-content: space-between;
@@ -4526,6 +4581,7 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  transition: transform 160ms ease, background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
 
 .history-preset-btn.active {
@@ -4543,10 +4599,11 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 
 .history-custom-range {
   margin-top: 12px;
-  padding: 12px;
-  border: 1px solid var(--border-main);
-  border-radius: 8px;
-  background: var(--bg-surface);
+  padding: 14px;
+  border: 1px solid rgba(96,165,250,0.28);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(240,246,255,0.95));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
 }
 
 .history-custom-shortcuts {
@@ -4564,6 +4621,7 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 700;
+  transition: transform 160ms ease, background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
 
 .history-custom-shortcuts button:hover {
@@ -4641,11 +4699,12 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   gap: 6px;
   padding: 8px 14px;
   border: none;
-  background: var(--bg-surface);
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(241,246,255,0.95));
   color: var(--text-muted);
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
 .history-view-tab + .history-view-tab {
@@ -4657,8 +4716,17 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   color: #fff;
 }
 
+.history-view-tab:hover:not(.active) {
+  background: var(--bg-elevated);
+  color: var(--text-main);
+}
+
 .history-charts-panel {
   margin-bottom: 20px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.62), rgba(245,248,255,0.62));
+  border: 1px solid rgba(203,213,225,0.8);
+  border-radius: 12px;
+  padding: 18px;
 }
 
 .history-charts-panel-head {
@@ -4679,6 +4747,48 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 .history-charts-panel-head span {
   font-size: 0.85rem;
   color: var(--text-muted);
+}
+
+.history-chart-toolbar {
+  display: grid;
+  gap: 6px;
+}
+
+.history-chart-toolbar > span {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.history-chart-buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.history-chart-buttons button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border-main);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.history-chart-buttons button.active {
+  background: var(--brand-primary);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.18);
+}
+
+.history-chart-buttons button:hover:not(.active) {
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+  transform: translateY(-1px);
 }
 
 .history-chart-filter label {
@@ -4712,6 +4822,7 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 
 .history-battery-chart-set {
   margin-bottom: 18px;
+  padding: 6px 0 0;
 }
 
 .history-battery-chart-set h3 {
@@ -4928,6 +5039,44 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   font-size: 0.9rem;
 }
 
+.help-modal {
+  position: relative;
+  width: min(1040px, calc(100vw - 32px));
+  height: min(820px, calc(100vh - 32px));
+  border: 1px solid var(--border-main);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-xl);
+  animation: pop-in 220ms ease-out;
+}
+
+.help-modal-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.help-modal .about-modal-close {
+  z-index: 2;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  border-color: rgba(148, 163, 184, 0.32);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .telemetry-chart-card {
   display: flex;
   flex-direction: column;
@@ -4935,6 +5084,8 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   padding: 14px;
   border-radius: 10px;
   border-top: 3px solid var(--brand-primary);
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(240,246,255,0.94));
 }
 
 .telemetry-chart-card.compact {
@@ -4953,6 +5104,9 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 
 .telemetry-chart-card:hover {
   transform: translateY(-2px);
+  border-color: rgba(59,130,246,0.32);
+  box-shadow: 0 16px 32px rgba(37, 99, 235, 0.12);
+  filter: saturate(1.03);
 }
 
 .telemetry-chart-card .chart-container {
@@ -5032,6 +5186,7 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   color: var(--text-muted);
   font-size: 0.7rem;
   font-weight: 800;
+  transition: transform 160ms ease, background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
 
 .chart-download-actions button:hover {
@@ -5108,8 +5263,13 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 :root[data-theme='dark'] .metric strong,
 :root[data-theme='dark'] .dashboard-config-summary h2,
 :root[data-theme='dark'] .dashboard-config-item strong,
+:root[data-theme='dark'] .dashboard-config-item label,
+:root[data-theme='dark'] .dashboard-config-item select,
+:root[data-theme='dark'] .dashboard-config-item input,
 :root[data-theme='dark'] .custom-chart-section-head h2,
-:root[data-theme='dark'] .custom-chart-panel-head h3 {
+:root[data-theme='dark'] .custom-chart-panel-head h3,
+:root[data-theme='dark'] .custom-chart-selectors label,
+:root[data-theme='dark'] .custom-chart-selectors select {
   color: #f8fafc !important;
 }
 
@@ -5119,8 +5279,24 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 :root[data-theme='dark'] .dashboard-config-eyebrow,
 :root[data-theme='dark'] .dashboard-config-item span,
 :root[data-theme='dark'] .pi-status-main span,
-:root[data-theme='dark'] .custom-chart-section-head p {
+:root[data-theme='dark'] .custom-chart-section-head p,
+:root[data-theme='dark'] .custom-chart-selectors label span {
   color: var(--text-muted) !important;
+}
+
+:root[data-theme='dark'] .dashboard-config-item select,
+:root[data-theme='dark'] .dashboard-config-item input,
+:root[data-theme='dark'] .custom-chart-selectors select,
+:root[data-theme='dark'] .custom-chart-selectors input {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border-strong) !important;
+  color: var(--text-main) !important;
+}
+
+:root[data-theme='dark'] .dashboard-config-item select option,
+:root[data-theme='dark'] .custom-chart-selectors select option {
+  background: var(--bg-surface) !important;
+  color: var(--text-main) !important;
 }
 
 :root[data-theme='dark'] .metric {
@@ -5179,6 +5355,46 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   border-color: #2d3a52 !important;
 }
 
+:root[data-theme='dark'] .global-charts-section,
+:root[data-theme='dark'] .custom-chart-section {
+  background: linear-gradient(180deg, rgba(17,24,39,0.95), rgba(15,23,42,0.9)) !important;
+  border-color: rgba(82,99,124,0.8) !important;
+}
+
+:root[data-theme='dark'] .global-charts-head p,
+:root[data-theme='dark'] .custom-chart-section-head p,
+:root[data-theme='dark'] .telemetry-chart-range,
+:root[data-theme='dark'] .telemetry-chart-meta,
+:root[data-theme='dark'] .telemetry-chart-value,
+:root[data-theme='dark'] .custom-chart-panel-head .telemetry-chart-range {
+  color: var(--text-muted) !important;
+}
+
+:root[data-theme='dark'] .telemetry-chart-card,
+:root[data-theme='dark'] .custom-chart-builder,
+:root[data-theme='dark'] .custom-chart-panel,
+:root[data-theme='dark'] .dashboard-config-summary,
+:root[data-theme='dark'] .instrument-panel-header {
+  background: linear-gradient(180deg, rgba(17,24,39,0.98), rgba(15,23,42,0.96)) !important;
+}
+
+:root[data-theme='dark'] .telemetry-chart-card .panel-head span,
+:root[data-theme='dark'] .custom-chart-panel .panel-head span,
+:root[data-theme='dark'] .dashboard-config-summary .dashboard-config-item span {
+  background: rgba(255,255,255,0.04) !important;
+  color: var(--text-muted) !important;
+}
+
+:root[data-theme='dark'] .chart-download-actions button,
+:root[data-theme='dark'] .visual-toggle button {
+  color: var(--text-main) !important;
+}
+
+:root[data-theme='dark'] .visual-toggle button.active,
+:root[data-theme='dark'] .chart-download-actions button:hover {
+  color: #dbeafe !important;
+}
+
 :root[data-theme='dark'] .global-chart-buttons button,
 :root[data-theme='dark'] .clear-focused-chart {
   background: #172033 !important;
@@ -5196,6 +5412,12 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 :root[data-theme='dark'] .telemetry-chart-card.focused {
   border-color: rgba(147, 197, 253, 0.7) !important;
   box-shadow: 0 20px 44px rgba(37, 99, 235, 0.22);
+}
+
+:root[data-theme='dark'] .custom-chart-selectors label,
+:root[data-theme='dark'] .history-chart-filter label,
+:root[data-theme='dark'] .dashboard-config-item span {
+  color: var(--text-muted) !important;
 }
 
 :root[data-theme='dark'] .session-info {
@@ -5255,6 +5477,66 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 :root[data-theme='dark'] .history-table td {
   color: var(--text-main) !important;
   border-bottom: 1px solid var(--border-main) !important;
+}
+:root[data-theme='dark'] .history-page,
+:root[data-theme='dark'] .history-hero,
+:root[data-theme='dark'] .history-filters-panel,
+:root[data-theme='dark'] .history-charts-panel,
+:root[data-theme='dark'] .history-results,
+:root[data-theme='dark'] .history-filter-block,
+:root[data-theme='dark'] .history-active-filters,
+:root[data-theme='dark'] .history-custom-range,
+:root[data-theme='dark'] .history-export-options,
+:root[data-theme='dark'] .history-view-tabs,
+:root[data-theme='dark'] .history-view-tab {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-main) !important;
+}
+:root[data-theme='dark'] .history-page,
+:root[data-theme='dark'] .history-hero-copy h1,
+:root[data-theme='dark'] .history-results h2,
+:root[data-theme='dark'] .history-results-sub,
+:root[data-theme='dark'] .history-charts-panel-head h2,
+:root[data-theme='dark'] .history-charts-panel-head span,
+:root[data-theme='dark'] .history-filter-label,
+:root[data-theme='dark'] .history-filter-block select,
+:root[data-theme='dark'] .history-filter-block input,
+:root[data-theme='dark'] .history-filter-block span,
+:root[data-theme='dark'] .history-custom-help,
+:root[data-theme='dark'] .history-empty {
+  color: var(--text-main) !important;
+}
+:root[data-theme='dark'] .history-filter-block select,
+:root[data-theme='dark'] .history-filter-block input {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border-strong) !important;
+}
+
+:root[data-theme='dark'] .history-filter-block input[type="date"] {
+  color-scheme: dark;
+  background: linear-gradient(180deg, rgba(23,32,51,0.99), rgba(17,24,39,0.97)) !important;
+  border-color: rgba(96,165,250,0.62) !important;
+  color: var(--text-main) !important;
+  cursor: pointer;
+}
+
+:root[data-theme='dark'] .history-filter-block input[type="date"]::-webkit-calendar-picker-indicator {
+  width: 18px;
+  height: 18px;
+  padding: 4px;
+  margin-left: 6px;
+  border-radius: 6px;
+  background: rgba(96,165,250,0.16);
+  filter: invert(1) brightness(1.1);
+}
+
+:root[data-theme='dark'] .history-custom-range {
+  background: linear-gradient(180deg, rgba(17,24,39,0.98), rgba(15,23,42,0.96)) !important;
+  border-color: rgba(96,165,250,0.22) !important;
+}
+:root[data-theme='dark'] .history-table {
+  background: var(--bg-surface) !important;
+  color: var(--text-main) !important;
 }
 :root[data-theme='dark'] .history-table tbody tr:hover {
   background: rgba(255,255,255,0.02) !important;
@@ -5562,6 +5844,10 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 /* === Custom chart builder === */
 .global-charts-section {
   margin-top: 8px;
+  padding: 18px;
+  border: 1px solid rgba(191,219,254,0.85);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.82), rgba(239,246,255,0.78));
 }
 
 .global-charts-head {
@@ -5649,6 +5935,10 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 
 .custom-chart-section {
   margin-top: 24px;
+  padding: 18px;
+  border: 1px solid rgba(186,230,253,0.85);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.82), rgba(240,249,255,0.8));
 }
 
 .custom-chart-section-head h2 {
@@ -5668,6 +5958,15 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 .custom-chart-builder {
   margin-bottom: 14px;
   padding: 16px;
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+  background: linear-gradient(180deg, rgba(255,255,255,0.99), rgba(240,246,255,0.95));
+}
+
+.custom-chart-builder:hover {
+  transform: translateY(-2px);
+  border-color: rgba(59,130,246,0.26);
+  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.10);
+  filter: saturate(1.02);
 }
 
 .custom-chart-selectors {
@@ -5736,8 +6035,16 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 .custom-chart-panel {
   padding: 16px;
   min-height: 380px;
-  background: var(--bg-surface);
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(244,249,255,0.95));
   border: 1px solid var(--border-main);
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+
+.custom-chart-panel:hover {
+  transform: translateY(-2px);
+  border-color: rgba(59,130,246,0.22);
+  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.10);
+  filter: saturate(1.02);
 }
 
 .custom-chart-panel-head {

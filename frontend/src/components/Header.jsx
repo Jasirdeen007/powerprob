@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BatteryCharging, Info, LayoutPanelTop, LogOut, Menu, Moon, Sun, User, X } from "lucide-react";
-import { getAppInfo } from "../backendClient";
+import { BatteryCharging, LogOut, Menu, Moon, Sun, User, X } from "lucide-react";
 
 function BrandLogo({ size = 22 }) {
   return (
@@ -13,8 +12,7 @@ function BrandLogo({ size = 22 }) {
 function Header({ activePage, onPageChange, currentUser, onLogout, theme, onToggleTheme }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
-  const [appInfo, setAppInfo] = useState(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const profileRef = useRef(null);
 
   const items = [
@@ -22,8 +20,8 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
     { key: "traceability", label: "History Analytics" }
   ];
 
-  function openAbout() {
-    setAboutOpen(true);
+  function openHelp() {
+    setHelpOpen(true);
     setProfileMenuOpen(false);
     setMobileMenuOpen(false);
   }
@@ -45,26 +43,16 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
   }, [profileMenuOpen]);
 
   useEffect(() => {
-    if (!aboutOpen || appInfo) return undefined;
-    let cancelled = false;
-    getAppInfo()
-      .then((info) => {
-        if (!cancelled) setAppInfo(info);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAppInfo({
-            name: "PowerProbe",
-            version: "0.1.0",
-            credits: ["PowerProbe Team 6"],
-            manual: "frontend/docs/README.md"
-          });
-        }
-      });
+    function onMessage(event) {
+      if (event.data?.type === "powerprobe:close-help") {
+        setHelpOpen(false);
+      }
+    }
+    window.addEventListener("message", onMessage);
     return () => {
-      cancelled = true;
+      window.removeEventListener("message", onMessage);
     };
-  }, [aboutOpen, appInfo]);
+  }, []);
 
   return (
     <header className="header-top">
@@ -73,7 +61,6 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
           <BrandLogo />
           <div className="brand-text">
             <strong className="brand-name">PowerProbe</strong>
-            <span className="brand-subtitle">Battery Intelligence</span>
           </div>
         </div>
 
@@ -89,11 +76,8 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
               {label}
             </button>
           ))}
-          <a className="nav-item nav-link-item" href="#" onClick={(e) => e.preventDefault()}>
-            Demo Video Placeholder
-          </a>
-          <button type="button" className="nav-item nav-link-item" onClick={openAbout}>
-            About PowerProbe
+          <button type="button" className="nav-item nav-link-item" onClick={openHelp}>
+            Help Documentation
           </button>
         </nav>
 
@@ -159,11 +143,8 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
               {label}
             </button>
           ))}
-          <a className="mobile-nav-item" href="#" onClick={(e) => { e.preventDefault(); setMobileMenuOpen(false); }}>
-            Demo Video Placeholder
-          </a>
-          <button type="button" className="mobile-nav-item" onClick={openAbout}>
-            About PowerProbe
+          <button type="button" className="mobile-nav-item" onClick={openHelp}>
+            Help Documentation
           </button>
           <button type="button" className="mobile-nav-item" onClick={onToggleTheme}>
             {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
@@ -172,29 +153,20 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
         </nav>
       )}
 
-      {aboutOpen && (
-        <div className="about-modal-backdrop" role="presentation" onMouseDown={() => setAboutOpen(false)}>
+      {helpOpen && (
+        <div className="about-modal-backdrop help-modal-backdrop" role="presentation" onMouseDown={() => setHelpOpen(false)}>
           <section
-            className="about-modal"
+            className="help-modal"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="about-powerprobe-title"
+            aria-labelledby="powerprobe-help-title"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <button className="about-modal-close" type="button" onClick={() => setAboutOpen(false)} aria-label="Close about dialog">
+            <button className="about-modal-close" type="button" onClick={() => setHelpOpen(false)} aria-label="Close help documentation">
               <X size={18} />
             </button>
-            <div className="about-modal-mark">
-              <BrandLogo size={24} />
-            </div>
-            <h2 id="about-powerprobe-title">About {appInfo?.name ?? "PowerProbe"}</h2>
-            <p className="about-modal-summary">
-              Battery telemetry, configuration, and analytics for live and historical session monitoring.
-            </p>
-            <div className="about-modal-meta">
-              <div><LayoutPanelTop size={14} /><span>Version {appInfo?.version ?? "loading"}</span></div>
-              <div><Info size={14} /><span>{(appInfo?.credits ?? ["Loading credits..."]).join(" | ")}</span></div>
-            </div>
+            <h2 id="powerprobe-help-title" className="sr-only">PowerProbe Help Documentation</h2>
+            <iframe className="help-modal-frame" src="/help.html" title="PowerProbe Help Documentation" />
           </section>
         </div>
       )}

@@ -80,8 +80,8 @@ function Landing({ mode, onEnterApp, onShowLogin, onShowSignup, onBackHome, onAu
         )}
       </main>
       <footer className="landing-footer">
-        <span>PowerProbe Battery Intelligence</span>
-        <a href="/help.html" target="_blank" rel="noreferrer">Help Documentation</a>
+        <span>PowerProbe</span>
+        <a href="#" onClick={(e) => e.preventDefault()}>About PowerProbe</a>
         <span>Version 0.1.0</span>
       </footer>
     </div>
