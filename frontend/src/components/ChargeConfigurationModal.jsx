@@ -13,13 +13,14 @@ function ChargeConfigurationModal({
   onBatteryTypeChange,
   onVoltageChange,
   onChargeCurrentChange,
-  onBatteryNameChange
+  onBatteryNameChange,
+  userId
 }) {
   const [localBatteryType, setLocalBatteryType] = useState(batteryType);
   const [localVoltage, setLocalVoltage] = useState(voltage);
   const [localChargeCurrent, setLocalChargeCurrent] = useState(chargeCurrent);
   const [localBatteryName, setLocalBatteryName] = useState(batteryName);
-  const [chemistries, setChemistries] = useState(loadChemistries());
+  const [chemistries, setChemistries] = useState(() => loadChemistries(userId));
   const [customChemistry, setCustomChemistry] = useState("");
 
   useEffect(() => {
@@ -28,13 +29,13 @@ function ChargeConfigurationModal({
     setLocalVoltage(voltage);
     setLocalChargeCurrent(chargeCurrent);
     setLocalBatteryName(batteryName);
-    setChemistries(loadChemistries());
-  }, [isOpen, batteryType, voltage, chargeCurrent, batteryName]);
+    setChemistries(loadChemistries(userId));
+  }, [isOpen, batteryType, voltage, chargeCurrent, batteryName, userId]);
 
   if (!isOpen) return null;
 
   function handleAddChemistry() {
-    const next = saveCustomChemistry(customChemistry);
+    const next = saveCustomChemistry(customChemistry, userId);
     setChemistries(next);
     const added = customChemistry.trim();
     if (added) {

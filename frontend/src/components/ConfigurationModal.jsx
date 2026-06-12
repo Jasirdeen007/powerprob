@@ -22,7 +22,8 @@ function ConfigurationModal({
   profileSpecs = {},
   profileDescriptions = {},
   batteryName = "",
-  onBatteryNameChange
+  onBatteryNameChange,
+  userId
 }) {
   const [localCRating, setLocalCRating] = useState(cRating);
   const [localBatteryType, setLocalBatteryType] = useState(batteryType);
@@ -31,7 +32,7 @@ function ConfigurationModal({
   const [localVoltage, setLocalVoltage] = useState(voltage);
   const [localDroneProfile, setLocalDroneProfile] = useState(droneProfile);
   const [localBatteryName, setLocalBatteryName] = useState(batteryName);
-  const [chemistries, setChemistries] = useState(loadChemistries());
+  const [chemistries, setChemistries] = useState(() => loadChemistries(userId));
   const [customChemistry, setCustomChemistry] = useState("");
 
   useEffect(() => {
@@ -43,11 +44,11 @@ function ConfigurationModal({
     setLocalVoltage(voltage);
     setLocalDroneProfile(droneProfile);
     setLocalBatteryName(batteryName);
-    setChemistries(loadChemistries());
-  }, [isOpen, cRating, batteryType, mah, numCells, voltage, droneProfile, batteryName]);
+    setChemistries(loadChemistries(userId));
+  }, [isOpen, cRating, batteryType, mah, numCells, voltage, droneProfile, batteryName, userId]);
 
   function handleAddChemistry() {
-    const next = saveCustomChemistry(customChemistry);
+    const next = saveCustomChemistry(customChemistry, userId);
     setChemistries(next);
     const added = customChemistry.trim();
     if (added) {

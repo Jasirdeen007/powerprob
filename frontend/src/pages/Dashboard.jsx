@@ -97,7 +97,7 @@ function buildReportLineChart(readings, metricKey, label, unit, color = "#2563eb
   `;
 }
 
-function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, activeSession = {}, profiles = [], onStartSession, onEndSession, onPauseSession, piStatus }) {
+function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, activeSession = {}, profiles = [], onStartSession, onEndSession, onPauseSession, piStatus, userId }) {
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [chargeConfigModalOpen, setChargeConfigModalOpen] = useState(false);
   const [operationMode, setOperationMode] = useState("discharge");
@@ -228,6 +228,14 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
   });
 
   const powerValue = activeLivePoint.voltage * activeLivePoint.current;
+  const focusedMetricConfig = focusedMetric ? GLOBAL_METRICS.find((metric) => metric.metricKey === focusedMetric) : null;
+  const focusedMetricValues = focusedMetric
+    ? readings.map((reading) => Number(reading?.[focusedMetric])).filter(Number.isFinite)
+    : [];
+  const focusedMetricLatest = focusedMetric ? Number(activeLivePoint?.[focusedMetric] ?? readings.at(-1)?.[focusedMetric] ?? 0) : 0;
+  const focusedMetricAverage = focusedMetricValues.length
+    ? focusedMetricValues.reduce((total, value) => total + value, 0) / focusedMetricValues.length
+    : 0;
   const tone = activeLivePoint.status === "critical" ? "danger" : activeLivePoint.status === "warning" ? "warn" : "good";
   const PiStatusIcon = piConnected ? Wifi : WifiOff;
   const piStatusLabel = hasDemoTelemetry
@@ -507,15 +515,17 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             Configuration
           </button>
 
-          <button
-            className="btn-export-pdf"
-            onClick={handleExportDashboardPdf}
-            title="Export dashboard report as PDF"
-            type="button"
-          >
-            <FileText size={18} />
-            Export PDF
-          </button>
+          {isRunning && activeSessionId && (
+            <button
+              className="btn-export-pdf"
+              onClick={handleExportDashboardPdf}
+              title="Export dashboard report as PDF"
+              type="button"
+            >
+              <FileText size={18} />
+              Export PDF
+            </button>
+          )}
 
           <button
             className={`btn-run ${isRunning && !controlPaused ? "active" : ""}`}
@@ -669,10 +679,24 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
           )}
         </div>
 
-        {focusedMetric && (
-          <p className="focused-chart-note">
-            Showing one selected global telemetry chart with the instrument panel readings above.
-          </p>
+        {focusedMetricConfig && (
+          <section className="focused-metric-panel" aria-label={`${focusedMetricConfig.title} focused reading`}>
+            <div>
+              <span>Focused metric</span>
+              <strong>{focusedMetricConfig.title}</strong>
+            </div>
+            <div>
+              <span>Live reading</span>
+              <strong>{formatReportNumber(focusedMetricLatest, focusedMetric === "soc" ? 0 : focusedMetric === "soh" || focusedMetric === "temperature" ? 1 : 2)} {focusedMetricConfig.unit}</strong>
+            </div>
+            <div>
+              <span>Average in run</span>
+              <strong>{formatReportNumber(focusedMetricAverage, focusedMetric === "soc" ? 0 : focusedMetric === "soh" || focusedMetric === "temperature" ? 1 : 2)} {focusedMetricConfig.unit}</strong>
+            </div>
+            <button className="clear-focused-chart" type="button" onClick={() => setFocusedMetric("")}>
+              Exit focused view
+            </button>
+          </section>
         )}
 
         <div className={`chart-row-two-cols ${focusedMetric ? "focused-chart-grid" : ""}`}>
@@ -686,7 +710,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             compact
             showToggles
             controlledChartType={`${globalChartType}:${globalChartVersion}`}
-            onSelectChart={setFocusedMetric}
+            onSelectChart={(metric) => setFocusedMetric((current) => current === metric ? "" : metric)}
             focused={focusedMetric === "voltage"}
           />
           )}
@@ -700,7 +724,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             compact
             showToggles
             controlledChartType={`${globalChartType}:${globalChartVersion}`}
-            onSelectChart={setFocusedMetric}
+            onSelectChart={(metric) => setFocusedMetric((current) => current === metric ? "" : metric)}
             focused={focusedMetric === "current"}
           />
           )}
@@ -717,7 +741,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             compact
             showToggles
             controlledChartType={`${globalChartType}:${globalChartVersion}`}
-            onSelectChart={setFocusedMetric}
+            onSelectChart={(metric) => setFocusedMetric((current) => current === metric ? "" : metric)}
             focused={focusedMetric === "temperature"}
           />
           )}
@@ -731,7 +755,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             compact
             showToggles
             controlledChartType={`${globalChartType}:${globalChartVersion}`}
-            onSelectChart={setFocusedMetric}
+            onSelectChart={(metric) => setFocusedMetric((current) => current === metric ? "" : metric)}
             focused={focusedMetric === "power"}
           />
           )}
@@ -749,7 +773,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             compact
             showToggles
             controlledChartType={`${globalChartType}:${globalChartVersion}`}
-            onSelectChart={setFocusedMetric}
+            onSelectChart={(metric) => setFocusedMetric((current) => current === metric ? "" : metric)}
             focused={focusedMetric === "soc"}
           />
           )}
@@ -764,7 +788,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             compact
             showToggles
             controlledChartType={`${globalChartType}:${globalChartVersion}`}
-            onSelectChart={setFocusedMetric}
+            onSelectChart={(metric) => setFocusedMetric((current) => current === metric ? "" : metric)}
             focused={focusedMetric === "soh"}
           />
           )}
@@ -796,6 +820,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
         onBatteryNameChange={setBatteryName}
         profileSpecs={profileSpecs}
         profileDescriptions={profileDescriptions}
+        userId={userId}
       />
 
       <ChargeConfigurationModal
@@ -810,6 +835,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
         onVoltageChange={setChargeVoltage}
         onChargeCurrentChange={setChargeCurrent}
         onBatteryNameChange={setBatteryName}
+        userId={userId}
       />
 
       <ChargeDischargeModal

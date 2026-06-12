@@ -20,6 +20,24 @@ import Landing from "./pages/Landing";
 import HistoryAnalytics from "./pages/historyAnalytics";
 import { clamp } from "./lib/battery";
 
+function AppFooter() {
+  const year = new Date().getFullYear();
+
+  return (
+    <footer className="app-footer">
+      <div className="app-footer-brand">
+        <strong>PowerProbe</strong>
+      </div>
+      <nav className="app-footer-links" aria-label="Footer">
+        <a href="/help.html" target="_blank" rel="noreferrer">Help Documentation</a>
+        <span>Version 0.1.0</span>
+        <span>Battery telemetry platform</span>
+      </nav>
+      <span className="app-footer-copy">Copyright {year} PowerProbe Team 6. Internal engineering use.</span>
+    </footer>
+  );
+}
+
 function makeStaticInitialData() {
   const initialBatteryId = localDemoData.batteries[0]?.batteryId ?? "B0047";
   return {
@@ -207,7 +225,7 @@ function mergeSessions(currentSessions = [], incomingSessions = []) {
 function App() {
   const initialBattery = localDemoData.batteries[0]?.batteryId ?? "B0047";
   const [data, setData] = useState(makeStaticInitialData);
-  const [authView, setAuthView] = useState("landing");
+  const [authView, setAuthView] = useState(authEnabled ? "checking" : "landing");
   const [activePage, setActivePage] = useState("dashboard");
   const [selectedBattery, setSelectedBattery] = useState(initialBattery);
   const [dashboardBattery, setDashboardBattery] = useState(initialBattery);
@@ -472,7 +490,10 @@ function App() {
   useEffect(() => {
     if (!authEnabled) return undefined;
     return subscribeAuthState((user) => {
-      if (!user) return;
+      if (!user) {
+        setAuthView((current) => (current === "checking" ? "landing" : current));
+        return;
+      }
       setCurrentUser({
         ...appUser,
         uid: user.uid,
@@ -747,6 +768,17 @@ function App() {
     return response;
   }
 
+  if (authView === "checking") {
+    return (
+      <main className="app-auth-loading">
+        <div className="app-auth-loading-card">
+          <strong>PowerProbe</strong>
+          <span>Restoring your session...</span>
+        </div>
+      </main>
+    );
+  }
+
   if (authView !== "app") {
     return (
       <Landing
@@ -785,7 +817,6 @@ function App() {
         onLogout={handleLogout} 
         theme={theme}
         onToggleTheme={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
-        piStatus={piStatus}
       />
       <main className="app-content">
         {activePage === "dashboard" && (
@@ -802,12 +833,14 @@ function App() {
             onPauseSession={handlePauseSession}
             piStatus={piStatus}
             piConnected={piStatus.connected}
+            userId={userId}
           />
         )}
         {activePage === "traceability" && (
           <HistoryAnalytics data={data} selectedBattery={selectedBattery} onBatteryChange={setSelectedBattery} />
         )}
       </main>
+      <AppFooter />
     </div>
   );
 }

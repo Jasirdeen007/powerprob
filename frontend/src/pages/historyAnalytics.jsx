@@ -51,12 +51,26 @@ function buildCsv(records) {
   return [columns.join(","), ...rows].join("\n");
 }
 
-function toInputDateTime(value) {
+function toInputDate(value) {
   if (!value) return "";
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return "";
   const pad = (num) => String(num).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function startOfLocalDay(value) {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+  const ms = date.getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function endOfLocalDay(value) {
+  if (!value) return null;
+  const date = new Date(`${value}T23:59:59.999`);
+  const ms = date.getTime();
+  return Number.isFinite(ms) ? ms : null;
 }
 
 function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
@@ -144,10 +158,11 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
 
   const dateRange = useMemo(() => {
     if (preset === "custom") {
-      const start = customStart ? new Date(customStart).getTime() : null;
-      const end = customEnd ? new Date(customEnd).getTime() : null;
-      return { start: Number.isFinite(start) ? start : null, end: Number.isFinite(end) ? end : null };
+      return { start: startOfLocalDay(customStart), end: endOfLocalDay(customEnd) };
     }
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     return null;
   }, [customEnd, customStart, preset]);
 
@@ -272,7 +287,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
         activeFilterBadges={activeFilterBadges}
         recordCount={records.length}
         filteredCount={filteredRecords.length}
-        toInputDateTime={toInputDateTime}
+        toInputDate={toInputDate}
       />
 
       {activeView === "charts" && <HistoryChartsPanel records={filteredRecords} batteries={batteryOptions} />}

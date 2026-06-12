@@ -1,7 +1,7 @@
 import { Filter, RotateCcw } from "lucide-react";
 
 const PRESETS = [
-  { key: "NONE", label: "Any time" },
+  { key: "NONE", label: "All" },
   { key: "custom", label: "Custom" }
 ];
 
@@ -20,7 +20,7 @@ function HistoryFilters({
   activeFilterBadges = [],
   recordCount = 0,
   filteredCount = 0,
-  toInputDateTime
+  toInputDate
 }) {
   return (
     <section className="panel history-filters-panel">
@@ -77,23 +77,28 @@ function HistoryFilters({
             ))}
           </div>
           {preset === "custom" ? (
-            <div className="history-custom-dates">
-              <label>
-                <span>Start</span>
-                <input
-                  type="datetime-local"
-                  value={toInputDateTime(customStart)}
-                  onChange={(e) => onCustomStartChange(e.target.value)}
-                />
-              </label>
-              <label>
-                <span>End</span>
-                <input
-                  type="datetime-local"
-                  value={toInputDateTime(customEnd)}
-                  onChange={(e) => onCustomEndChange(e.target.value)}
-                />
-              </label>
+            <div className="history-custom-range">
+              <div className="history-custom-dates">
+                <label>
+                  <span>Start date</span>
+                  <input
+                    type="date"
+                    value={toInputDate(customStart)}
+                    onChange={(e) => onCustomStartChange(e.target.value)}
+                    placeholder="dd-mm-yyyy"
+                  />
+                </label>
+                <label>
+                  <span>End date</span>
+                  <input
+                    type="date"
+                    value={toInputDate(customEnd)}
+                    onChange={(e) => onCustomEndChange(e.target.value)}
+                    placeholder="dd-mm-yyyy"
+                  />
+                </label>
+              </div>
+              <p className="history-custom-help">Use the calendar picker or choose a quick range. End date includes the full selected day.</p>
             </div>
           ) : null}
         </div>

@@ -17,7 +17,7 @@ import {
   Cell,
   CartesianGrid
 } from "recharts";
-import { Download } from "lucide-react";
+import { BarChart3, Download } from "lucide-react";
 import { getDynamicMetricYDomain } from "../lib/chartDomains";
 import { buildAxisLabel } from "../lib/chartEngine";
 import { getChartOptionsForMetric, getDefaultChartType } from "../lib/chartOptions";
@@ -373,6 +373,7 @@ function TelemetryChartCard({
         <div>
           <h3 className="telemetry-chart-title">{capitalize(title)}</h3>
           <div className="telemetry-chart-meta">
+            <span className="telemetry-chart-icon"><BarChart3 size={13} /></span>
             <span className="telemetry-chart-range">{buildAxisLabel(metricKey, yDomain)}</span>
             <span className="telemetry-chart-value" style={{ color: statusColor }} title={latestDisplay}>
               {latestValue.toFixed(isPercent ? 0 : 2)}{isPercent ? "%" : ` ${unit}`}

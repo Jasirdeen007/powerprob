@@ -56,7 +56,7 @@ export default function HistoryChartsPanel({ records, batteries = [] }) {
   const batteryList = batteries.length > 0
     ? batteries
     : Array.from(new Map((records ?? []).map((row) => [row.batteryId, { batteryId: row.batteryId, batteryName: row.batteryName }])).values());
-  const activeBatteryId = selectedBatteryId || batteryList[0]?.batteryId || "ALL";
+  const activeBatteryId = selectedBatteryId || batteryList[0]?.batteryId || "";
 
   useEffect(() => {
     if (!selectedBatteryId && batteryList[0]?.batteryId) {
@@ -64,12 +64,11 @@ export default function HistoryChartsPanel({ records, batteries = [] }) {
     }
   }, [batteryList, selectedBatteryId]);
 
-  const filteredRecords = activeBatteryId === "ALL"
-    ? (records ?? [])
-    : (records ?? []).filter((row) => row.batteryId === activeBatteryId);
+  const filteredRecords = activeBatteryId
+    ? (records ?? []).filter((row) => row.batteryId === activeBatteryId)
+    : (records ?? []);
 
   const batterySummary = useMemo(() => {
-    if (activeBatteryId === "ALL") return "All batteries compared";
     const battery = batteryList.find((item) => item.batteryId === activeBatteryId);
     return battery?.batteryName ? `${battery.batteryName} (${activeBatteryId})` : activeBatteryId;
   }, [activeBatteryId, batteryList]);
@@ -90,18 +89,17 @@ export default function HistoryChartsPanel({ records, batteries = [] }) {
           <span>{filteredRecords.length} readings | {batterySummary}</span>
         </div>
         <div className="history-chart-filter">
-          <label>
-            Battery trend
-            <select value={activeBatteryId} onChange={(event) => setSelectedBatteryId(event.target.value)}>
-              {batteryList.map((battery) => (
-                <option key={battery.batteryId} value={battery.batteryId}>
-                  {battery.batteryName ? `${battery.batteryName} (${battery.batteryId})` : battery.batteryId}
-                </option>
-              ))}
-              <option value="ALL">Compare all batteries</option>
-            </select>
-          </label>
-        </div>
+            <label>
+              Battery trend
+              <select value={activeBatteryId} onChange={(event) => setSelectedBatteryId(event.target.value)}>
+                {batteryList.map((battery) => (
+                  <option key={battery.batteryId} value={battery.batteryId}>
+                    {battery.batteryName ? `${battery.batteryName} (${battery.batteryId})` : battery.batteryId}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
       </div>
 
       <ChartSet records={filteredRecords} />

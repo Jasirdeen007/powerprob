@@ -11,6 +11,8 @@ import {
   LoaderCircle,
   LockKeyhole,
   Mail,
+  Eye,
+  EyeOff,
   UserRound,
   Zap
 } from "lucide-react";
@@ -77,6 +79,11 @@ function Landing({ mode, onEnterApp, onShowLogin, onShowSignup, onBackHome, onAu
           <FullPageCarousel onEnterApp={onEnterApp} onShowLogin={onShowLogin} />
         )}
       </main>
+      <footer className="landing-footer">
+        <span>PowerProbe Battery Intelligence</span>
+        <a href="/help.html" target="_blank" rel="noreferrer">Help Documentation</a>
+        <span>Version 0.1.0</span>
+      </footer>
     </div>
   );
 }
@@ -251,6 +258,7 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
   const [toastType, setToastType] = useState("error");
   const [forgotOpen, setForgotOpen] = useState(false);
   const [resetPending, setResetPending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const isSignup = mode === "signup";
 
   useEffect(() => {
@@ -396,16 +404,25 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
           </label>
           <label>
             Password
-            <span>
+            <span className="password-input-wrap">
               <LockKeyhole size={17} />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={form.password}
                 onChange={(event) => updateField("password", event.target.value)}
                 placeholder="Password"
                 autoComplete={isSignup ? "new-password" : "current-password"}
                 required
               />
+              <button
+                className="password-eye-button"
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                title={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
             </span>
           </label>
 

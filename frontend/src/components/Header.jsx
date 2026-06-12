@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BatteryCharging, LogOut, Menu, Moon, Sun, User, X } from "lucide-react";
+import { BatteryCharging, Info, LayoutPanelTop, LogOut, Menu, Moon, Sun, User, X } from "lucide-react";
 import { getAppInfo } from "../backendClient";
 
 function BrandLogo({ size = 22 }) {
@@ -73,6 +73,7 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
           <BrandLogo />
           <div className="brand-text">
             <strong className="brand-name">PowerProbe</strong>
+            <span className="brand-subtitle">Battery Intelligence</span>
           </div>
         </div>
 
@@ -88,8 +89,8 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
               {label}
             </button>
           ))}
-          <a className="nav-item nav-link-item" href="/help.html" target="_blank" rel="noreferrer">
-            Help Documentation
+          <a className="nav-item nav-link-item" href="#" onClick={(e) => e.preventDefault()}>
+            Demo Video Placeholder
           </a>
           <button type="button" className="nav-item nav-link-item" onClick={openAbout}>
             About PowerProbe
@@ -158,8 +159,8 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
               {label}
             </button>
           ))}
-          <a className="mobile-nav-item" href="/help.html" target="_blank" rel="noreferrer" onClick={() => setMobileMenuOpen(false)}>
-            Help Documentation
+          <a className="mobile-nav-item" href="#" onClick={(e) => { e.preventDefault(); setMobileMenuOpen(false); }}>
+            Demo Video Placeholder
           </a>
           <button type="button" className="mobile-nav-item" onClick={openAbout}>
             About PowerProbe
@@ -187,11 +188,12 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
               <BrandLogo size={24} />
             </div>
             <h2 id="about-powerprobe-title">About {appInfo?.name ?? "PowerProbe"}</h2>
-            <p>Version {appInfo?.version ?? "loading"}</p>
-            <div className="about-modal-credits">
-              {(appInfo?.credits ?? ["Loading credits..."]).map((credit) => (
-                <span key={credit}>{credit}</span>
-              ))}
+            <p className="about-modal-summary">
+              Battery telemetry, configuration, and analytics for live and historical session monitoring.
+            </p>
+            <div className="about-modal-meta">
+              <div><LayoutPanelTop size={14} /><span>Version {appInfo?.version ?? "loading"}</span></div>
+              <div><Info size={14} /><span>{(appInfo?.credits ?? ["Loading credits..."]).join(" | ")}</span></div>
             </div>
           </section>
         </div>
