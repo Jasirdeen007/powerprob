@@ -50,19 +50,11 @@ function ChartSet({ records, label }) {
   );
 }
 
-export default function HistoryChartsPanel({ records, batteries = [] }) {
-  const [selectedBatteryId, setSelectedBatteryId] = useState("");
-
+export default function HistoryChartsPanel({ records, batteries = [], selectedBatteryId, onBatteryChange }) {
   const batteryList = batteries.length > 0
     ? batteries
     : Array.from(new Map((records ?? []).map((row) => [row.batteryId, { batteryId: row.batteryId, batteryName: row.batteryName }])).values());
   const activeBatteryId = selectedBatteryId || batteryList[0]?.batteryId || "";
-
-  useEffect(() => {
-    if (!selectedBatteryId && batteryList[0]?.batteryId) {
-      setSelectedBatteryId(batteryList[0].batteryId);
-    }
-  }, [batteryList, selectedBatteryId]);
 
   const filteredRecords = activeBatteryId
     ? (records ?? []).filter((row) => row.batteryId === activeBatteryId)
@@ -91,7 +83,7 @@ export default function HistoryChartsPanel({ records, batteries = [] }) {
         <div className="history-chart-filter">
           <label>
             Battery trend
-            <select value={activeBatteryId} onChange={(event) => setSelectedBatteryId(event.target.value)}>
+            <select value={activeBatteryId} onChange={(event) => onBatteryChange(event.target.value)}>
               {batteryList.map((battery) => (
                 <option key={battery.batteryId} value={battery.batteryId}>
                   {battery.batteryName ? `${battery.batteryName} (${battery.batteryId})` : battery.batteryId}

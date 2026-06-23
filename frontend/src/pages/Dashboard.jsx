@@ -739,7 +739,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             title="Voltage Trend"
             metricKey="voltage"
             unit="V"
-            data={readings}
+            data={focusedMetric === "voltage" ? readings : readings.slice(-200)}
             operationMode={operationMode}
             compact
             showToggles
@@ -753,7 +753,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             title="Current Load"
             metricKey="current"
             unit="A"
-            data={readings}
+            data={focusedMetric === "current" ? readings : readings.slice(-200)}
             operationMode={operationMode}
             compact
             showToggles
@@ -770,7 +770,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             title="Thermal Profile"
             metricKey="temperature"
             unit="°C"
-            data={readings}
+            data={focusedMetric === "temperature" ? readings : readings.slice(-200)}
             operationMode={operationMode}
             compact
             showToggles
@@ -784,7 +784,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             title="Power Consumption"
             metricKey="power"
             unit="W"
-            data={readings}
+            data={focusedMetric === "power" ? readings : readings.slice(-200)}
             operationMode={operationMode}
             compact
             showToggles
@@ -801,7 +801,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             title="State of Charge"
             metricKey="soc"
             unit="%"
-            data={readings}
+            data={focusedMetric === "soc" ? readings : readings.slice(-200)}
             forceYRange={{ min: 0, max: 100 }}
             operationMode={operationMode}
             compact
@@ -816,7 +816,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             title="State of Health"
             metricKey="soh"
             unit="%"
-            data={readings}
+            data={focusedMetric === "soh" ? readings : readings.slice(-200)}
             forceYRange={{ min: 0, max: 100 }}
             operationMode={operationMode}
             compact

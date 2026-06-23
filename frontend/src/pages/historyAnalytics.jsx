@@ -80,6 +80,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
   const [customEnd, setCustomEnd] = useState("");
   const [activeView, setActiveView] = useState("charts");
   const [exportOpen, setExportOpen] = useState(false);
+  const [selectedBatteryId, setSelectedBatteryId] = useState("");
 
   const realSessions = useMemo(() => {
     return (data?.testSessions ?? [])
@@ -90,6 +91,12 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
         return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
       });
   }, [data]);
+
+  const handleSessionChange = (sessionId) => {
+    setSelectedSessionId(sessionId);
+    const session = realSessions.find((s) => s.sessionId === sessionId);
+    setSelectedBatteryId(session ? session.batteryId : "");
+  };
 
   const sessionOptions = useMemo(() => {
     return realSessions.map((session) => {
@@ -155,6 +162,8 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
       return labelA.localeCompare(labelB);
     });
   }, [records]);
+
+
 
   const dateRange = useMemo(() => {
     if (preset === "custom") {
@@ -277,7 +286,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
         onPresetChange={setDatePreset}
         sessionId={selectedSessionId}
         sessionOptions={sessionOptions}
-        onSessionChange={setSelectedSessionId}
+        onSessionChange={handleSessionChange}
         customStart={customStart}
         customEnd={customEnd}
         onCustomStartChange={(v) => { setPreset("custom"); setCustomStart(v); }}
@@ -290,7 +299,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
         toInputDate={toInputDate}
       />
 
-      {activeView === "charts" && <HistoryChartsPanel records={filteredRecords} batteries={batteryOptions} />}
+      {activeView === "charts" && <HistoryChartsPanel records={filteredRecords} batteries={batteryOptions} selectedBatteryId={selectedBatteryId} onBatteryChange={setSelectedBatteryId} />}
 
       {activeView === "table" && (
         <section className="panel history-results">

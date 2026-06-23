@@ -146,7 +146,7 @@ function plotScrollWidth(spanSeconds, rightMargin = CHART_MARGIN.right) {
   return Y_AXIS_OVERLAY_WIDTH + spanSeconds * PIXELS_PER_SECOND + rightMargin;
 }
 
-export const SERIES_CLIP_PROPS = { clipDot: false, isAnimationActive: false };
+export const SERIES_CLIP_PROPS = { clipDot: false, isAnimationActive: true };
 
 export function getTimeAxisExtent(timeValues, visibleSeconds = DEFAULT_VISIBLE_SECONDS) {
   if (!timeValues?.length) {
@@ -273,10 +273,10 @@ export function buildAlignedDualTicks(leftDomain, rightDomain, tickCount = DEFAU
 export function scrollChartToEnd(scrollEl) {
   if (!scrollEl) return;
   if (scrollEl.scrollWidth <= scrollEl.clientWidth) {
-    scrollEl.scrollLeft = 0;
+    scrollEl.scroll({ left: 0, behavior: "smooth" });
     return;
   }
-  scrollEl.scrollLeft = scrollEl.scrollWidth - scrollEl.clientWidth;
+  scrollEl.scroll({ left: scrollEl.scrollWidth - scrollEl.clientWidth, behavior: "smooth" });
 }
 
 export function isScrolledNearEnd(scrollEl, thresholdPx = 24) {

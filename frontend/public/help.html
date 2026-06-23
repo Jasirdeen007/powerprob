@@ -86,15 +86,7 @@
   </head>
   <body>
     <main>
-      <div class="actions">
-        <button
-          class="exit"
-          type="button"
-          onclick="if (window.parent && window.parent !== window) { window.parent.postMessage({ type: 'powerprobe:close-help' }, window.location.origin); } else { window.location.href = '/'; }"
-        >
-          Exit Help
-        </button>
-      </div>
+
       <div class="hero">
         <h1>PowerProbe Help Documentation</h1>
         <p class="lead">A quick operating guide for live battery telemetry, configuration, and historical review.</p>

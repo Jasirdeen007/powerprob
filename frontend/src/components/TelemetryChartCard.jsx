@@ -152,10 +152,21 @@ function TelemetryChartCard({
     }
   }, [controlledChartType]);
 
-  const processedData = useMemo(() => data.map((d) => ({
-    ...d,
-    time: typeof d.time === "number" ? d.time : Number(d.time) || 0
-  })), [data]);
+
+
+  const processedData = useMemo(() => {
+    const mappedData = data.map((d) => ({
+      ...d,
+      time: typeof d.time === "number" ? d.time : Number(d.time) || 0
+    }));
+
+    if (mappedData.length > 2000) {
+      const every = Math.ceil(mappedData.length / 1000);
+      return mappedData.filter((_, i) => i % every === 0);
+    }
+    return mappedData;
+  }, [data]);
+  
   const hasActiveData = useMemo(() => hasMeaningfulTelemetry(processedData, metricKey), [metricKey, processedData]);
 
   const timeValues = useMemo(() => processedData.map((d) => d.time).filter(Number.isFinite), [processedData]);
@@ -190,16 +201,23 @@ function TelemetryChartCard({
       followLatestRef.current = false;
       return;
     }
+
     if (!hasActiveData) {
       if (scrollRef.current) scrollRef.current.scrollLeft = 0;
       followLatestRef.current = false;
       hadActiveDataRef.current = false;
       return;
     }
+
     if (!hadActiveDataRef.current) {
-      followLatestRef.current = true;
+      if (scrollRef.current) {
+        scrollRef.current.scrollLeft = 0;
+      }
       hadActiveDataRef.current = true;
+      followLatestRef.current = true;
+      return;
     }
+
     if (followLatestRef.current) {
       scrollChartToEnd(scrollRef.current);
     }
@@ -359,6 +377,7 @@ function TelemetryChartCard({
   return (
     <div
       className={`telemetry-chart-card panel ${compact ? "compact" : ""} ${focused ? "focused" : ""}`}
+      style={{ minWidth: 0 }}
       onClick={(event) => {
         if (!onSelectChart) return;
         if (event.target.closest("button, a, input, select, textarea")) return;
