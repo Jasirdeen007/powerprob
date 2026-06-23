@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Info, LayoutPanelTop, X } from "lucide-react";
 import Header from "./components/Header";
+import SessionTimeoutWarning from "./components/SessionTimeoutWarning";
 import { endSession, getHistorical, getLiveTelemetry, getPiStatus, getProfiles, getSessions, sendPiCommand, startSession } from "./backendClient";
 import { appUser } from "./data/appConfig";
 import {
   authEnabled,
   createFirebaseAccount,
   firebaseEnabled,
+  googleLogin,
   loadFirebaseData,
   signInFirebaseAccount,
   signOutFirebaseAccount,
@@ -18,6 +20,7 @@ import {
 import localDemoData from "./demo-data.json";
 import Dashboard from "./pages/Dashboard";
 import Landing from "./pages/Landing";
+import ResetPassword from "./pages/ResetPassword";
 import HistoryAnalytics from "./pages/historyAnalytics";
 import { clamp } from "./lib/battery";
 
@@ -255,7 +258,13 @@ function mergeSessions(currentSessions = [], incomingSessions = []) {
 function App() {
   const initialBattery = localDemoData.batteries[0]?.batteryId ?? "B0047";
   const [data, setData] = useState(makeStaticInitialData);
-  const [authView, setAuthView] = useState(authEnabled ? "checking" : "landing");
+  const initialAuthView = (() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("oobCode")) {
+      return "reset-password";
+    }
+    return authEnabled ? "checking" : "landing";
+  })();
+  const [authView, setAuthView] = useState(initialAuthView);
   const [activePage, setActivePage] = useState("dashboard");
   const [selectedBattery, setSelectedBattery] = useState(initialBattery);
   const [dashboardBattery, setDashboardBattery] = useState(initialBattery);
@@ -276,6 +285,21 @@ function App() {
     isRunning: false,
     isPaused: false
   });
+  
+  const failedAttemptsRef = useRef(0);
+  const lockoutUntilRef = useRef(0);
+  const [isLockedOut, setIsLockedOut] = useState(false);
+  const [lockoutRemaining, setLockoutRemaining] = useState(0);
+  
+  const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+  const WARNING_BEFORE_MS = 5 * 60 * 1000;
+  const [showSessionWarning, setShowSessionWarning] = useState(false);
+  const [sessionWarningRemaining, setSessionWarningRemaining] = useState(0);
+  const lastActivityRef = useRef(Date.now());
+  const logoutTimerRef = useRef(null);
+  const warningTimerRef = useRef(null);
+  const warningIntervalRef = useRef(null);
+  
   const userId = currentUser?.uid || appUser.uid;
 
   useEffect(() => {
@@ -285,6 +309,49 @@ function App() {
       document.documentElement.removeAttribute("data-theme");
     }
   }, [theme]);
+
+  useEffect(() => {
+    if (authView !== "app") return;
+
+    const resetActivity = () => {
+      lastActivityRef.current = Date.now();
+      if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+      if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+      if (warningIntervalRef.current) clearInterval(warningIntervalRef.current);
+      setShowSessionWarning(false);
+
+      logoutTimerRef.current = setTimeout(() => {
+        handleLogout();
+      }, INACTIVITY_TIMEOUT_MS);
+
+      warningTimerRef.current = setTimeout(() => {
+        setShowSessionWarning(true);
+        const remaining = Math.ceil(WARNING_BEFORE_MS / 1000);
+        setSessionWarningRemaining(remaining);
+        
+        warningIntervalRef.current = setInterval(() => {
+          setSessionWarningRemaining((prev) => {
+            if (prev <= 1) {
+              clearInterval(warningIntervalRef.current);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }, INACTIVITY_TIMEOUT_MS - WARNING_BEFORE_MS);
+    };
+
+    const activityEvents = ["mousedown", "mousemove", "keydown", "scroll", "touchstart"];
+    activityEvents.forEach((event) => window.addEventListener(event, resetActivity));
+    resetActivity();
+
+    return () => {
+      activityEvents.forEach((event) => window.removeEventListener(event, resetActivity));
+      if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+      if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+      if (warningIntervalRef.current) clearInterval(warningIntervalRef.current);
+    };
+  }, [authView]);
 
   useEffect(() => {
     let timeoutId;
@@ -534,7 +601,7 @@ function App() {
       setAuthView("app");
       setActivePage("dashboard");
     });
-  }, [userId]);
+  }, []);
 
   const defaultLiveBattery = useMemo(() => {
     if (!data) return "B0047";
@@ -569,48 +636,112 @@ function App() {
     });
   }, [firebaseReady, userId]);
 
+  const MAX_FAILED_ATTEMPTS = 5;
+  const LOCKOUT_DURATION_MS = 60 * 1000;
+  const ATTEMPT_WINDOW_MS = 2 * 60 * 1000;
+
   async function handleAuthSubmit(userDetails) {
+    if (isLockedOut) {
+      setAuthError(`Too many attempts. Please wait ${lockoutRemaining} seconds.`);
+      return;
+    }
+
     setAuthError("");
     setAuthPending(true);
 
     try {
       const fallbackName = userDetails.email ? userDetails.email.split("@")[0] : appUser.name;
 
-      if (authEnabled) {
-        if (userDetails.mode === "signup") {
-          const user = await createFirebaseAccount(userDetails);
-          setCurrentUser({
-            ...appUser,
-            uid: user.uid,
-            name: user.displayName || userDetails.name || fallbackName,
-            email: user.email ?? userDetails.email ?? "",
-            role: appUser.role
-          });
-        } else {
-          const user = await signInFirebaseAccount(userDetails);
-          setCurrentUser({
-            ...appUser,
-            uid: user.uid,
-            name: user.displayName || fallbackName,
-            email: user.email ?? userDetails.email ?? "",
-            role: appUser.role
-          });
-        }
-      } else {
+      if (!authEnabled) {
+        setAuthError("Authentication requires Firebase configuration. Please create a .env file with your Firebase credentials.");
+        return;
+      }
+
+      if (userDetails.mode === "google") {
+        const user = await googleLogin();
         setCurrentUser({
           ...appUser,
-          uid: appUser.uid,
-          name: userDetails.name || fallbackName,
-          email: userDetails.email ?? "",
+          uid: user.uid,
+          name: user.displayName || user.email?.split("@")[0] || appUser.name,
+          email: user.email ?? "",
+          photoURL: user.photoURL ?? "",
+          role: appUser.role
+        });
+      } else if (userDetails.mode === "signup") {
+        const user = await createFirebaseAccount(userDetails);
+        setCurrentUser({
+          ...appUser,
+          uid: user.uid,
+          name: user.displayName || userDetails.name || fallbackName,
+          email: user.email ?? userDetails.email ?? "",
+          role: appUser.role
+        });
+      } else {
+        const user = await signInFirebaseAccount(userDetails);
+        setCurrentUser({
+          ...appUser,
+          uid: user.uid,
+          name: user.displayName || fallbackName,
+          email: user.email ?? userDetails.email ?? "",
           role: appUser.role
         });
       }
 
+      failedAttemptsRef.current = 0;
+      lockoutUntilRef.current = 0;
+      setIsLockedOut(false);
       setAuthView("app");
       setActivePage("dashboard");
     } catch (error) {
-      console.error(error);
-      setAuthError(error instanceof Error ? error.message : "Authentication failed.");
+      console.error("[Auth] Error:", error?.code, error?.message, error);
+      
+      const firebaseErrorMessages = {
+        "auth/user-not-found": "Invalid email or password.",
+        "auth/wrong-password": "Invalid email or password.",
+        "auth/invalid-email": "Please enter a valid email address.",
+        "auth/email-already-in-use": "An account with this email already exists.",
+        "auth/weak-password": "Password must be at least 6 characters.",
+        "auth/too-many-requests": "Account temporarily locked due to multiple failed attempts. Try again later or reset your password.",
+        "auth/invalid-credential": "Invalid email or password.",
+        "auth/network-request-failed": "Network error. Please check your connection.",
+        "auth/user-disabled": "This account has been disabled. Contact support.",
+        "auth/operation-not-allowed": "Google sign-in is not enabled. Please enable it in your Firebase Console under Authentication > Sign-in method.",
+        "auth/popup-closed-by-user": "Sign-in popup was closed. Please try again.",
+        "auth/popup-blocked": "Popup was blocked by your browser. Please allow popups for this site and try again.",
+        "auth/cancelled-popup-request": "Sign-in was cancelled. Please try again.",
+        "auth/unauthorized-domain": "This domain is not authorized for Google sign-in. Add it in Firebase Console under Authentication > Settings > Authorized domains."
+      };
+      
+      const errorCode = error?.code || "";
+      const safeMessage = firebaseErrorMessages[errorCode]
+        || (error instanceof Error ? "Authentication failed. Please try again." : "Authentication failed. Please try again.");
+      
+      if (userDetails.mode === "login") {
+        const now = Date.now();
+        if (now - (lockoutUntilRef.current - LOCKOUT_DURATION_MS) > ATTEMPT_WINDOW_MS) {
+          failedAttemptsRef.current = 0;
+        }
+        
+        failedAttemptsRef.current++;
+        
+        if (failedAttemptsRef.current >= MAX_FAILED_ATTEMPTS) {
+          lockoutUntilRef.current = now + LOCKOUT_DURATION_MS;
+          setIsLockedOut(true);
+          setLockoutRemaining(Math.ceil(LOCKOUT_DURATION_MS / 1000));
+          
+          const lockoutInterval = setInterval(() => {
+            const remaining = Math.max(0, Math.ceil((lockoutUntilRef.current - Date.now()) / 1000));
+            setLockoutRemaining(remaining);
+            if (remaining <= 0) {
+              clearInterval(lockoutInterval);
+              setIsLockedOut(false);
+              failedAttemptsRef.current = 0;
+            }
+          }, 1000);
+        }
+      }
+      
+      setAuthError(safeMessage);
     } finally {
       setAuthPending(false);
     }
@@ -620,9 +751,52 @@ function App() {
     if (authEnabled) {
       await signOutFirebaseAccount();
     }
+    
+    if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+    if (warningIntervalRef.current) clearInterval(warningIntervalRef.current);
+    
+    try {
+      localStorage.removeItem("powerprobe_recent_emails");
+      localStorage.removeItem("powerprobe_custom_chemistries");
+    } catch (e) {
+      // Ignore storage cleanup errors
+    }
+    
+    setData(makeStaticInitialData);
+    setShowSessionWarning(false);
     setAuthView("landing");
     setCurrentUser(appUser);
     setActivePage("dashboard");
+    setActiveRun({ sessionId: "", deviceId: "", isRunning: false, isPaused: false });
+  }
+
+  function handleStaySignedIn() {
+    lastActivityRef.current = Date.now();
+    setShowSessionWarning(false);
+    if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+    if (warningIntervalRef.current) clearInterval(warningIntervalRef.current);
+    
+    logoutTimerRef.current = setTimeout(() => {
+      handleLogout();
+    }, INACTIVITY_TIMEOUT_MS);
+    
+    warningTimerRef.current = setTimeout(() => {
+      setShowSessionWarning(true);
+      const remaining = Math.ceil(WARNING_BEFORE_MS / 1000);
+      setSessionWarningRemaining(remaining);
+      
+      warningIntervalRef.current = setInterval(() => {
+        setSessionWarningRemaining((prev) => {
+          if (prev <= 1) {
+            clearInterval(warningIntervalRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }, INACTIVITY_TIMEOUT_MS - WARNING_BEFORE_MS);
   }
 
   async function handleStartSession(payload) {
@@ -809,6 +983,17 @@ function App() {
     );
   }
 
+  if (authView === "reset-password") {
+    return (
+      <ResetPassword
+        onBackToLogin={() => {
+          window.history.replaceState({}, "", window.location.pathname);
+          setAuthView("login");
+        }}
+      />
+    );
+  }
+
   if (authView !== "app") {
     return (
       <Landing
@@ -871,6 +1056,14 @@ function App() {
         )}
       </main>
       <AppFooter />
+      
+      {showSessionWarning && (
+        <SessionTimeoutWarning
+          remainingSeconds={sessionWarningRemaining}
+          onStaySignedIn={handleStaySignedIn}
+          onSignOut={handleLogout}
+        />
+      )}
     </div>
   );
 }

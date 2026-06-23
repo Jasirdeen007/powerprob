@@ -6,6 +6,7 @@ import {
   BatteryCharging,
   ChevronLeft,
   ChevronRight,
+  Chrome,
   Gauge,
   LineChart,
   LoaderCircle,
@@ -17,7 +18,9 @@ import {
   Zap
 } from "lucide-react";
 import ToastNotification from "../components/ToastNotification";
-import { authEnabled, sendPasswordReset } from "../firebaseClient";
+import PasswordStrengthIndicator from "../components/PasswordStrengthIndicator";
+import FormFieldError from "../components/FormFieldError";
+import { authEnabled, googleLogin, sendPasswordReset } from "../firebaseClient";
 
 const RECENT_EMAILS_KEY = "powerprobe_recent_emails";
 
@@ -259,6 +262,8 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
   const [forgotOpen, setForgotOpen] = useState(false);
   const [resetPending, setResetPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({ name: "", email: "", password: "" });
+  const [touchedFields, setTouchedFields] = useState({ name: false, email: false, password: false });
   const isSignup = mode === "signup";
 
   useEffect(() => {
@@ -268,19 +273,95 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
     }
   }, [authError]);
 
+  function sanitizeInput(value) {
+    return String(value).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "").trim();
+  }
+
+  function sanitizePassword(value) {
+    return String(value).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
+  }
+
+  function validateField(field, value) {
+    switch (field) {
+      case "name":
+        if (isSignup && !value.trim()) return "Please enter your name";
+        return "";
+      case "email": {
+        if (!value.trim()) return "Email is required";
+        const trimmed = value.trim();
+        if (/\s/.test(trimmed)) return "Email must not contain spaces";
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return "Please enter a valid email address";
+        const domain = trimmed.split("@")[1];
+        if (domain && domain.split(".").some(part => part.length === 0)) return "Please enter a valid email address";
+        return "";
+      }
+      case "password": {
+        if (!value) return "Password is required";
+        if (isSignup) {
+          if (value.length < 8) return "Password must be at least 8 characters";
+          if (!/[A-Z]/.test(value)) return "Password must contain an uppercase letter";
+          if (!/[a-z]/.test(value)) return "Password must contain a lowercase letter";
+          if (!/[0-9]/.test(value)) return "Password must contain a number";
+          if (!/[^A-Za-z0-9]/.test(value)) return "Password must contain a special character";
+        } else {
+          if (value.length < 6) return "Password must be at least 6 characters";
+        }
+        return "";
+      }
+      default:
+        return "";
+    }
+  }
+
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
+    if (touchedFields[field]) {
+      setFieldErrors((current) => ({ ...current, [field]: validateField(field, value) }));
+    }
+  }
+
+  function handleBlur(field) {
+    setTouchedFields((current) => ({ ...current, [field]: true }));
+    setFieldErrors((current) => ({ ...current, [field]: validateField(field, form[field]) }));
+  }
+
+  function handleGoogleLogin() {
+    onAuthSubmit({ mode: "google" });
   }
 
   function handleSubmit(event) {
     event.preventDefault();
-    const fallbackName = form.email ? form.email.split("@")[0] : "Battery Test User";
-    setRecentEmails(saveRecentEmail(form.email));
+    
+    const nameError = validateField("name", form.name);
+    const emailError = validateField("email", form.email);
+    const passwordError = validateField("password", form.password);
+    
+    setFieldErrors({
+      name: nameError,
+      email: emailError,
+      password: passwordError
+    });
+    setTouchedFields({
+      name: true,
+      email: true,
+      password: true
+    });
+    
+    if (nameError || emailError || passwordError) {
+      return;
+    }
+    
+    const sanitizedEmail = sanitizeInput(form.email);
+    const sanitizedPassword = sanitizePassword(form.password);
+    const sanitizedName = sanitizeInput(form.name);
+    const fallbackName = sanitizedEmail ? sanitizedEmail.split("@")[0] : "Battery Test User";
+    
+    setRecentEmails(saveRecentEmail(sanitizedEmail));
     onAuthSubmit({
       mode: isSignup ? "signup" : "login",
-      name: isSignup ? form.name.trim() || fallbackName : fallbackName,
-      email: form.email,
-      password: form.password,
+      name: isSignup ? sanitizedName || fallbackName : fallbackName,
+      email: sanitizedEmail,
+      password: sanitizedPassword,
       role: "User"
     });
   }
@@ -301,11 +382,12 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
       }
       await sendPasswordReset(form.email);
       setToastType("success");
-      setToastMessage("Password reset email sent. Check your inbox.");
+      setToastMessage("If an account with that email exists, a reset link has been sent.");
       setForgotOpen(false);
     } catch (error) {
-      setToastType("error");
-      setToastMessage(error instanceof Error ? error.message : "Could not send reset email.");
+      setToastType("success");
+      setToastMessage("If an account with that email exists, a reset link has been sent.");
+      setForgotOpen(false);
     } finally {
       setResetPending(false);
     }
@@ -329,10 +411,10 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
       </button>
 
       {forgotOpen ? (
-        <form className="auth-card" onSubmit={handleForgotSubmit}>
+        <form className="auth-card" onSubmit={handleForgotSubmit} aria-label="Reset password">
           <div>
-            <h1>Reset password</h1>
-            <p>Enter your account email and we will send a reset link.</p>
+            <h1 id="forgot-password-title">Reset password</h1>
+            <p id="forgot-password-description">Enter your account email and we will send a reset link.</p>
           </div>
           <label>
             Email
@@ -364,12 +446,12 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
           </button>
         </form>
       ) : (
-        <form className="auth-card" onSubmit={handleSubmit}>
+        <form className="auth-card" onSubmit={handleSubmit} aria-label={isSignup ? "Create account" : "Sign in"}>
           <div className="auth-card-brand">
             <BrandLogo size={28} />
             <div>
-              <h1>{isSignup ? "Create account" : "Login"}</h1>
-              <p>{isSignup ? "Create an account to enter the dashboard." : "Sign in with your email and password."}</p>
+              <h1 id="auth-title">{isSignup ? "Create account" : "Login"}</h1>
+              <p id="auth-description">{isSignup ? "Create an account to enter the dashboard." : "Sign in with your email and password."}</p>
             </div>
           </div>
 
@@ -381,9 +463,13 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
                 <input
                   value={form.name}
                   onChange={(event) => updateField("name", event.target.value)}
+                  onBlur={() => handleBlur("name")}
                   placeholder="User name"
+                  aria-invalid={!!fieldErrors.name}
+                  aria-describedby={fieldErrors.name ? "name-error" : undefined}
                 />
               </span>
+              <FormFieldError error={fieldErrors.name} id="name-error" />
             </label>
           )}
 
@@ -395,12 +481,16 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
                 type="email"
                 value={form.email}
                 onChange={(event) => updateField("email", event.target.value)}
+                onBlur={() => handleBlur("email")}
                 placeholder="user@example.com"
                 list="powerprobe-email-suggestions"
                 autoComplete="username email"
                 required
+                aria-invalid={!!fieldErrors.email}
+                aria-describedby={fieldErrors.email ? "email-error" : undefined}
               />
             </span>
+            <FormFieldError error={fieldErrors.email} id="email-error" />
           </label>
           <label>
             Password
@@ -410,9 +500,13 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
                 type={showPassword ? "text" : "password"}
                 value={form.password}
                 onChange={(event) => updateField("password", event.target.value)}
+                onBlur={() => handleBlur("password")}
                 placeholder="Password"
                 autoComplete={isSignup ? "new-password" : "current-password"}
+                minLength={isSignup ? 8 : 6}
                 required
+                aria-invalid={!!fieldErrors.password}
+                aria-describedby={fieldErrors.password ? "password-error" : undefined}
               />
               <button
                 className="password-eye-button"
@@ -424,7 +518,12 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
                 {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
               </button>
             </span>
+            <FormFieldError error={fieldErrors.password} id="password-error" />
           </label>
+          
+          {isSignup && (
+            <PasswordStrengthIndicator password={form.password} showRules={true} />
+          )}
 
           {!isSignup && (
             <button className="forgot-password-link" onClick={() => setForgotOpen(true)} type="button">
@@ -445,6 +544,29 @@ function AuthPanel({ mode, onBackHome, onAuthSubmit, onSwitchMode, authPending, 
               </>
             )}
           </button>
+
+          {authEnabled && (
+            <>
+              <div className="auth-divider">
+                <span>or</span>
+              </div>
+
+              <button 
+                className="auth-google-btn" 
+                type="button" 
+                onClick={handleGoogleLogin}
+                disabled={authPending}
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                </svg>
+                Continue with Google
+              </button>
+            </>
+          )}
 
           <button className="auth-switch" onClick={onSwitchMode} type="button">
             {isSignup ? "Already have an account? Login" : "New here? Create account"}

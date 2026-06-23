@@ -24,7 +24,12 @@ function ToastNotification({ message, type = "error", duration = 4000, onClose }
   if (!isVisible || !message) return null;
 
   return (
-    <div className={`toast-notification toast-${type} ${isVisible ? "toast-show" : "toast-hide"}`}>
+    <div 
+      className={`toast-notification toast-${type} ${isVisible ? "toast-show" : "toast-hide"}`}
+      role="alert"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <div className="toast-content">
         <AlertCircle size={18} className="toast-icon" />
         <p className="toast-message">{message}</p>

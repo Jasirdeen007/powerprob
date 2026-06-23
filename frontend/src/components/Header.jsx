@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BatteryCharging, LogOut, Menu, Moon, Sun, User, X } from "lucide-react";
+import LogoutConfirmModal from "./LogoutConfirmModal";
 
 function BrandLogo({ size = 22 }) {
   return (
@@ -13,6 +14,7 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const profileRef = useRef(null);
 
   const items = [
@@ -112,10 +114,8 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
                   type="button"
                   className="header-profile-action logout"
                   onClick={() => {
-                    if (window.confirm("Sign out?")) {
-                      onLogout();
-                      setProfileMenuOpen(false);
-                    }
+                    setProfileMenuOpen(false);
+                    setLogoutConfirmOpen(true);
                   }}
                 >
                   <LogOut size={16} /> Logout
@@ -170,6 +170,16 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
           </section>
         </div>
       )}
+
+      <LogoutConfirmModal
+        isOpen={logoutConfirmOpen}
+        onConfirm={() => {
+          setLogoutConfirmOpen(false);
+          onLogout();
+        }}
+        onCancel={() => setLogoutConfirmOpen(false)}
+        currentUser={currentUser}
+      />
     </header>
   );
 }

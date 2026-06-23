@@ -2,13 +2,17 @@ import { getApp, getApps, initializeApp } from "firebase/app";
 import { collection, doc, getDoc, getDocs, getFirestore } from "firebase/firestore";
 import { get, getDatabase, onValue, ref } from "firebase/database";
 import {
+  confirmPasswordReset as fbConfirmPasswordReset,
   createUserWithEmailAndPassword,
   getAuth,
+  GoogleAuthProvider,
   onAuthStateChanged,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
-  updateProfile
+  updateProfile,
+  verifyPasswordResetCode as fbVerifyPasswordResetCode
 } from "firebase/auth";
 import { setDoc } from "firebase/firestore";
 
@@ -202,19 +206,21 @@ function fallbackDisplayName(email, name) {
   return name?.trim() || email.split("@")[0] || "Battery Test User";
 }
 
-async function saveUserProfile(user, { name, role }) {
+async function saveUserProfile(user, { name, role, photoURL }) {
   const app = getFirebaseApp();
   if (!app) return;
 
   const db = getFirestore(app);
   try {
-    await setDoc(doc(db, "users", user.uid), {
+    const profileData = {
       uid: user.uid,
       email: user.email,
       displayName: user.displayName || fallbackDisplayName(user.email || "", name),
       role: role || "User",
       updatedAt: new Date().toISOString()
-    }, { merge: true });
+    };
+    if (photoURL) profileData.photoURL = photoURL;
+    await setDoc(doc(db, "users", user.uid), profileData, { merge: true });
   } catch (error) {
     console.warn("Firebase Auth user created, but profile document write failed.", error);
   }
@@ -236,6 +242,7 @@ export async function signInFirebaseAccount({ email, password }) {
   if (!auth) throw new Error("Firebase Auth is not configured.");
 
   const credential = await signInWithEmailAndPassword(auth, email, password);
+  await saveUserProfile(credential.user, { role: "User" });
   return credential.user;
 }
 
@@ -247,11 +254,37 @@ export async function signOutFirebaseAccount() {
 
 export async function sendPasswordReset(email) {
   const auth = getFirebaseAuth();
-  if (!auth) {
-    throw new Error("Password reset requires Firebase Auth to be configured.");
-  }
-  if (!email?.trim()) {
-    throw new Error("Enter your email address to reset your password.");
-  }
-  await sendPasswordResetEmail(auth, email.trim());
+  if (!auth) throw new Error("Firebase Auth is not configured.");
+  if (!email?.trim()) throw new Error("Enter your email address to reset your password.");
+
+  const actionCodeSettings = {
+    url: "https://powerprobebatteries.netlify.app",
+    handleCodeInApp: false,
+  };
+  await sendPasswordResetEmail(auth, email.trim(), actionCodeSettings);
+}
+
+export async function googleLogin() {
+  const auth = getFirebaseAuth();
+  if (!auth) throw new Error("Firebase Auth is not configured.");
+  const provider = new GoogleAuthProvider();
+  const credential = await signInWithPopup(auth, provider);
+  await saveUserProfile(credential.user, {
+    name: credential.user.displayName,
+    role: "User",
+    photoURL: credential.user.photoURL
+  });
+  return credential.user;
+}
+
+export async function verifyPasswordResetCode(oobCode) {
+  const auth = getFirebaseAuth();
+  if (!auth) throw new Error("Firebase Auth is not configured.");
+  return fbVerifyPasswordResetCode(auth, oobCode);
+}
+
+export async function confirmPasswordReset(oobCode, newPassword) {
+  const auth = getFirebaseAuth();
+  if (!auth) throw new Error("Firebase Auth is not configured.");
+  await fbConfirmPasswordReset(auth, oobCode, newPassword);
 }

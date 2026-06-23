@@ -80,4 +80,11 @@ export function getHistorical(sessionId, { from, to, userId } = {}) {
   return request(`/historical?${params.toString()}`);
 }
 
+export function forgotPassword(email) {
+  return request("/api/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email })
+  });
+}
+
 export { API_BASE_URL };

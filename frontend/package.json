@@ -9,7 +9,9 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "preview:lan": "vite preview --host 0.0.0.0",
-    "firebase:seed": "node scripts/push-demo-to-firebase.js"
+    "firebase:seed": "node scripts/push-demo-to-firebase.js",
+    "audit": "npm audit --production",
+    "audit:fix": "npm audit fix"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^6.0.2",
@@ -18,7 +20,6 @@
     "prop-types": "^15.8.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-gauge-chart": "^0.5.1",
     "react-is": "^19.2.6",
     "recharts": "^3.8.1",
     "vite": "^8.0.13"
