@@ -22,49 +22,8 @@ import HistoryAnalytics from "./pages/historyAnalytics";
 import { clamp } from "./lib/battery";
 
 function AppFooter() {
-  const year = new Date().getFullYear();
-  const [aboutOpen, setAboutOpen] = useState(false);
-
   return (
-    <>
-      <footer className="app-footer">
-        <div className="app-footer-brand">
-          <strong>PowerProbe</strong>
-        </div>
-        <nav className="app-footer-links" aria-label="Footer">
-          <button type="button" className="app-footer-link-button" onClick={() => setAboutOpen(true)}>
-            About PowerProbe
-          </button>
-          <span>Version 0.1.0</span>
-          <span>Battery telemetry platform</span>
-        </nav>
-        <span className="app-footer-copy">Copyright {year} PowerProbe Team 6. Internal engineering use.</span>
-      </footer>
-
-      {aboutOpen && (
-        <div className="about-modal-backdrop" role="presentation" onMouseDown={() => setAboutOpen(false)}>
-          <section
-            className="about-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="about-powerprobe-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <button className="about-modal-close" type="button" onClick={() => setAboutOpen(false)} aria-label="Close about dialog">
-              <X size={18} />
-            </button>
-            <h2 id="about-powerprobe-title">About PowerProbe</h2>
-            <p className="about-modal-summary">
-              Battery telemetry, configuration, and analytics for live and historical session monitoring.
-            </p>
-            <div className="about-modal-meta">
-              <div><LayoutPanelTop size={14} /><span>Version 0.1.0</span></div>
-              <div><Info size={14} /><span>PowerProbe Team 6 | Battery analytics, telemetry, and traceability platform</span></div>
-            </div>
-          </section>
-        </div>
-      )}
-    </>
+    <footer className="app-footer" />
   );
 }
 

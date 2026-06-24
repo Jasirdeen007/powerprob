@@ -210,6 +210,12 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
     }
   }
 
+  function handleApplyCustomDateRange(start, end) {
+    setPreset("custom");
+    setCustomStart(start);
+    setCustomEnd(end);
+  }
+
   const activeFilterBadges = useMemo(() => {
     const badges = [];
     if (selectedSessionId !== "ALL") {
@@ -289,8 +295,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
         onSessionChange={handleSessionChange}
         customStart={customStart}
         customEnd={customEnd}
-        onCustomStartChange={(v) => { setPreset("custom"); setCustomStart(v); }}
-        onCustomEndChange={(v) => { setPreset("custom"); setCustomEnd(v); }}
+        onApplyCustomDateRange={handleApplyCustomDateRange}
         onReset={resetFilters}
         hasFilters={hasFilters}
         activeFilterBadges={activeFilterBadges}

@@ -4645,6 +4645,79 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
   line-height: 1.5;
 }
 
+.history-apply-button-wrap {
+  display: flex;
+  justify-content: center; /* Center the button */
+  margin-top: 15px; /* Some spacing from the help text */
+}
+
+.history-apply-btn {
+  min-height: 38px;
+  padding: 0 20px;
+  border-radius: 8px;
+  background: var(--brand-primary); /* Match custom card color (brand primary) */
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform 160ms ease, background-color 120ms ease, box-shadow 120ms ease;
+  border: 1px solid var(--brand-primary); /* Add border to match active preset button */
+}
+
+.history-apply-btn:hover {
+  background: var(--brand-secondary); /* Darker shade on hover */
+  border-color: var(--brand-secondary);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); /* Subtle shadow on hover */
+  transform: translateY(-1px); /* Lift effect on hover */
+}
+
+.history-apply-btn:active {
+  transform: translateY(0); /* Reset on click */
+}
+
+/* Dark mode override for the apply button */
+:root[data-theme='dark'] .history-apply-btn {
+  background: var(--brand-primary) !important;
+  border-color: var(--brand-primary) !important;
+  color: #fff !important;
+}
+
+:root[data-theme='dark'] .history-apply-btn:hover {
+  background: var(--brand-secondary) !important;
+  border-color: var(--brand-secondary) !important;
+  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3) !important;
+}
+
+.history-apply-button-wrap {
+  display: flex;
+  justify-content: center; /* Center the button */
+  margin-top: 15px; /* Some spacing from the help text */
+}
+
+.history-apply-btn {
+  min-height: 38px;
+  padding: 0 20px;
+  border-radius: 8px;
+  background: var(--brand-primary); /* Match custom card color (brand primary) */
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform 160ms ease, background-color 120ms ease, box-shadow 120ms ease;
+  border: 1px solid var(--brand-primary); /* Add border to match active preset button */
+}
+
+.history-apply-btn:hover {
+  background: var(--brand-secondary); /* Darker shade on hover */
+  border-color: var(--brand-secondary);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); /* Subtle shadow on hover */
+  transform: translateY(-1px); /* Lift effect on hover */
+}
+
+.history-apply-btn:active {
+  transform: translateY(0); /* Reset on click */
+}
+
 .history-mode-quick {
   display: flex;
   gap: 6px;
@@ -6210,10 +6283,16 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 
   .landing-slide-inner {
     grid-template-columns: 1fr;
+    text-align: center;
   }
 
   .landing-slide-visual {
     order: -1;
+    margin: 0 auto;
+  }
+
+  .landing-slide-actions {
+    justify-content: center;
   }
 }
 

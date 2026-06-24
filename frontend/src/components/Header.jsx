@@ -166,7 +166,7 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
               <X size={18} />
             </button>
             <h2 id="powerprobe-help-title" className="sr-only">PowerProbe Help Documentation</h2>
-            <iframe className="help-modal-frame" src="/help.html" title="PowerProbe Help Documentation" />
+            <iframe className="help-modal-frame" src={`/help.html?theme=${theme}`} title="PowerProbe Help Documentation" />
           </section>
         </div>
       )}

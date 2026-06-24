@@ -141,6 +141,7 @@ function TelemetryChartCard({
   const options = useMemo(() => getChartOptionsForMetric(metricKey), [metricKey]);
   const defaultType = useMemo(() => getDefaultChartType(metricKey), [metricKey]);
   const [activeChart, setActiveChart] = useState(defaultType);
+  const [isInitialAnimation, setIsInitialAnimation] = useState(true);
 
   useEffect(() => {
     setActiveChart(getDefaultChartType(metricKey));
@@ -166,6 +167,15 @@ function TelemetryChartCard({
     }
     return mappedData;
   }, [data]);
+
+  useEffect(() => {
+    if (processedData.length > 0) {
+      const timer = setTimeout(() => setIsInitialAnimation(false), 50);
+      return () => clearTimeout(timer);
+    } else {
+      setIsInitialAnimation(true);
+    }
+  }, [processedData.length]);
   
   const hasActiveData = useMemo(() => hasMeaningfulTelemetry(processedData, metricKey), [metricKey, processedData]);
 
@@ -317,7 +327,7 @@ function TelemetryChartCard({
 
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <ChartComponent data={processedData} margin={CHART_MARGIN}>
+        <ChartComponent data={processedData} margin={CHART_MARGIN} isAnimationActive={!isInitialAnimation}>
           <CartesianGrid clipPath="none" strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="time"

@@ -1,4 +1,5 @@
 import { Filter, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const PRESETS = [
   { key: "NONE", label: "All" },
@@ -13,8 +14,7 @@ function HistoryFilters({
   onSessionChange,
   customStart,
   customEnd,
-  onCustomStartChange,
-  onCustomEndChange,
+  onApplyCustomDateRange,
   onReset,
   hasFilters,
   activeFilterBadges = [],
@@ -22,6 +22,14 @@ function HistoryFilters({
   filteredCount = 0,
   toInputDate
 }) {
+  const [localStart, setLocalStart] = useState(customStart);
+  const [localEnd, setLocalEnd] = useState(customEnd);
+
+  useEffect(() => {
+    setLocalStart(customStart);
+    setLocalEnd(customEnd);
+  }, [customStart, customEnd]);
+
   return (
     <section className="panel history-filters-panel">
       <div className="history-controls-head">
@@ -83,8 +91,8 @@ function HistoryFilters({
                   <span>Start date</span>
                   <input
                     type="date"
-                    value={toInputDate(customStart)}
-                    onChange={(e) => onCustomStartChange(e.target.value)}
+                    value={toInputDate(localStart)}
+                    onChange={(e) => setLocalStart(e.target.value)}
                     placeholder="dd-mm-yyyy"
                   />
                 </label>
@@ -92,13 +100,22 @@ function HistoryFilters({
                   <span>End date</span>
                   <input
                     type="date"
-                    value={toInputDate(customEnd)}
-                    onChange={(e) => onCustomEndChange(e.target.value)}
+                    value={toInputDate(localEnd)}
+                    onChange={(e) => setLocalEnd(e.target.value)}
                     placeholder="dd-mm-yyyy"
                   />
                 </label>
               </div>
               <p className="history-custom-help">Use the calendar picker or choose a quick range. End date includes the full selected day.</p>
+              <div className="history-apply-button-wrap">
+                <button
+                  type="button"
+                  className="history-apply-btn"
+                  onClick={() => onApplyCustomDateRange(localStart, localEnd)}
+                >
+                  Apply
+                </button>
+              </div>
             </div>
           ) : null}
         </div>
