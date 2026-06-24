@@ -28,10 +28,54 @@
       }
       .hero {
         border: 1px solid var(--line);
-        border-radius: 18px;
+        border-radius: 12px;
         background: var(--panel);
         padding: 26px;
         box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+      }
+      .demo-panel {
+        display: grid;
+        gap: 18px;
+        margin-bottom: 32px;
+        padding: 20px;
+      }
+      .demo-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+      }
+      .demo-kicker {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 0 10px;
+        border: 1px solid rgba(96, 165, 250, 0.28);
+        border-radius: 999px;
+        background: rgba(96, 165, 250, 0.12);
+        color: var(--accent);
+        font-size: 0.76rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+      }
+      .video-frame {
+        position: relative;
+        width: 100%;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #020617;
+        aspect-ratio: 16 / 9;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+      }
+      .video-frame iframe {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: 0;
       }
       h1 { margin: 0 0 8px; font-size: 2rem; color: var(--text); }
       .lead { margin: 0; color: var(--muted); line-height: 1.7; }
@@ -62,6 +106,39 @@
         color: var(--muted);
         font-size: 0.9rem;
       }
+      .download-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .download-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 36px;
+        padding: 0 12px;
+        border: 1px solid rgba(96, 165, 250, 0.34);
+        border-radius: 8px;
+        background: rgba(96, 165, 250, 0.12);
+        color: var(--text);
+        text-decoration: none;
+        font-weight: 800;
+        font-size: 0.86rem;
+      }
+      .download-link:hover {
+        border-color: var(--accent);
+      }
+      .code-block {
+        margin-top: 12px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: rgba(2, 6, 23, 0.28);
+        color: var(--muted);
+        overflow-x: auto;
+        font: 0.82rem/1.55 Consolas, "SFMono-Regular", monospace;
+      }
       .actions {
         display: flex;
         justify-content: flex-end;
@@ -82,6 +159,12 @@
         cursor: pointer;
       }
       code { color: var(--accent); }
+      @media (max-width: 680px) {
+        main { padding: 18px 12px 36px; }
+        .hero { padding: 18px; }
+        .demo-head { display: grid; }
+        .demo-kicker { width: fit-content; }
+      }
     </style>
     <script>
       const theme = new URLSearchParams(window.location.search).get('theme');
@@ -100,6 +183,18 @@
   </head>
   <body>
     <main>
+      <div class="hero demo-panel" id="video-demo">
+        <div class="demo-head">
+          <div>
+            <h1>Dashboard Demo</h1>
+            <p class="lead">Watch this short video to learn how to navigate the dashboard, configure a session, and review historical data.</p>
+          </div>
+          <span class="demo-kicker">Quick start</span>
+        </div>
+        <div class="video-frame">
+          <iframe allow="fullscreen" allowfullscreen src="https://streamable.com/e/eg1vjv?" title="PowerProbe dashboard demo"></iframe>
+        </div>
+      </div>
 
       <div class="hero">
         <h1>PowerProbe Help Documentation</h1>
@@ -146,6 +241,20 @@
             Switch to History Analytics to inspect trends from completed sessions and compare against previous runs.
           </div>
         </div>
+
+        <section class="card" style="margin-top: 18px">
+          <h2>Raspberry Pi Service</h2>
+          <p class="lead">Use the MQTT service for the current PowerProbe flow. It connects the Pi outward to <code>broker.emqx.io:1883</code>, so browsers never connect directly to the Pi.</p>
+          <div class="download-row">
+            <a class="download-link" href="/pi-setup/powerprobe-pi-mqtt.service" download>Download MQTT service</a>
+            <a class="download-link" href="/pi-setup/README.txt" download>Download setup notes</a>
+          </div>
+          <pre class="code-block">sudo cp powerprobe-pi-mqtt.service /etc/systemd/system/powerprobe-pi.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now powerprobe-pi.service
+sudo systemctl restart powerprobe-pi.service
+sudo systemctl status powerprobe-pi.service</pre>
+        </section>
 
         <p class="footer">PowerProbe is built for battery telemetry, operational traceability, and practical session review.</p>
       </div>

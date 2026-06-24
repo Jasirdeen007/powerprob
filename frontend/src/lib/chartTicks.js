@@ -270,13 +270,27 @@ export function buildAlignedDualTicks(leftDomain, rightDomain, tickCount = DEFAU
 }
 
 /** Pin scroll to latest data only when content is wider than the viewport. */
-export function scrollChartToEnd(scrollEl) {
+export function scrollChartToEnd(scrollEl, behavior = "smooth") {
   if (!scrollEl) return;
   if (scrollEl.scrollWidth <= scrollEl.clientWidth) {
-    scrollEl.scroll({ left: 0, behavior: "smooth" });
+    scrollEl.scroll({ left: 0, behavior });
     return;
   }
-  scrollEl.scroll({ left: scrollEl.scrollWidth - scrollEl.clientWidth, behavior: "smooth" });
+  scrollEl.scroll({ left: scrollEl.scrollWidth - scrollEl.clientWidth, behavior });
+}
+
+export function scrollChartToTime(scrollEl, timeSeconds, behavior = "smooth") {
+  if (!scrollEl) return;
+  const t = Number(timeSeconds);
+  if (!Number.isFinite(t) || scrollEl.scrollWidth <= scrollEl.clientWidth) {
+    scrollEl.scroll({ left: 0, behavior });
+    return;
+  }
+
+  const latestX = Y_AXIS_OVERLAY_WIDTH + Math.max(0, t) * PIXELS_PER_SECOND;
+  const targetLeft = Math.max(0, latestX - scrollEl.clientWidth + 96);
+  const maxLeft = Math.max(0, scrollEl.scrollWidth - scrollEl.clientWidth);
+  scrollEl.scroll({ left: Math.min(targetLeft, maxLeft), behavior });
 }
 
 export function isScrolledNearEnd(scrollEl, thresholdPx = 24) {
@@ -284,6 +298,19 @@ export function isScrolledNearEnd(scrollEl, thresholdPx = 24) {
   if (scrollEl.scrollWidth <= scrollEl.clientWidth) return true;
   const distanceFromEnd = scrollEl.scrollWidth - scrollEl.clientWidth - scrollEl.scrollLeft;
   return distanceFromEnd <= thresholdPx;
+}
+
+export function isScrolledNearTime(scrollEl, timeSeconds, thresholdPx = 32) {
+  if (!scrollEl) return true;
+  if (scrollEl.scrollWidth <= scrollEl.clientWidth) return true;
+  const t = Number(timeSeconds);
+  if (!Number.isFinite(t)) return isScrolledNearEnd(scrollEl, thresholdPx);
+
+  const latestX = Y_AXIS_OVERLAY_WIDTH + Math.max(0, t) * PIXELS_PER_SECOND;
+  const targetLeft = Math.max(0, latestX - scrollEl.clientWidth + 96);
+  const maxLeft = Math.max(0, scrollEl.scrollWidth - scrollEl.clientWidth);
+  const expectedLeft = Math.min(targetLeft, maxLeft);
+  return Math.abs(scrollEl.scrollLeft - expectedLeft) <= thresholdPx || isScrolledNearEnd(scrollEl, thresholdPx);
 }
 
 function dedupeTicks(ticks) {

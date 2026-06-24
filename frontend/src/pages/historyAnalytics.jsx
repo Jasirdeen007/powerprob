@@ -254,7 +254,7 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
       <header className="history-hero">
         <div className="history-hero-copy">
           <h1>History Analytics</h1>
-          <p>Filter telemetry, view charts, or browse the data table.</p>
+          <p>Review completed telemetry sessions, compare trends, and export records.</p>
         </div>
         <div className="history-hero-actions">
           <div className="history-view-tabs">
@@ -310,14 +310,14 @@ function HistoryAnalytics({ data, selectedBattery, onBatteryChange }) {
         <section className="panel history-results">
           <div className="history-results-head">
             <div>
-              <h2>Session records</h2>
+              <h2>Telemetry records</h2>
               <p className="history-results-sub">
                 Showing {filteredRecords.length} telemetry packets from {visibleSessionCount} of {completedSessionCount} completed sessions
               </p>
             </div>
           </div>
           {filteredRecords.length === 0 ? (
-            <p className="history-empty">No records found for the selected filters.</p>
+            <p className="history-empty">No telemetry records match the selected filters. Adjust the session or date range to broaden the view.</p>
           ) : (
             <div className="history-table-wrap">
               <table className="history-table">
