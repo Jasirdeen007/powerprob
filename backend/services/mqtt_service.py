@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import socket
 import time
 import uuid
@@ -42,6 +41,7 @@ class MqttService:
         self.devices: dict[str, DeviceState] = {}
         self.session_devices: dict[str, str] = {}
         self.device_sessions: dict[str, str] = {}
+        self.unknown_sessions_stopped: set[tuple[str, str]] = set()
         self.broker_host = settings.mqtt_host
         self.topic_prefix = settings.mqtt_topic_prefix
 
@@ -52,8 +52,13 @@ class MqttService:
         if self.client:
             return
 
-        client_id = f"{settings.mqtt_client_id}-{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
-        self.client = mqtt.Client(client_id=client_id)
+        client_id = f"ppbe-{uuid.uuid4().hex[:12]}"
+        self.client = mqtt.Client(
+            client_id=client_id,
+            clean_session=True,
+            protocol=mqtt.MQTTv311,
+        )
+        self.client.reconnect_delay_set(min_delay=5, max_delay=60)
         if settings.mqtt_username:
             self.client.username_pw_set(settings.mqtt_username, settings.mqtt_password)
         self.client.on_connect = self._on_connect
@@ -78,13 +83,26 @@ class MqttService:
         self.connected = False
 
     def _on_connect(self, client, userdata, flags, rc) -> None:
-        self.connected = rc == 0
+        rc_value = int(rc)
+        self.connected = rc_value == 0
         if not self.connected:
-            logger.warning("MQTT connect failed rc=%s", rc)
+            logger.warning(
+                "MQTT connect failed rc=%s meaning=%s host=%s port=%s client_id_prefix=%s username_configured=%s",
+                rc,
+                self._connect_return_code_name(rc_value),
+                self.broker_host,
+                settings.mqtt_port,
+                client._client_id.decode("utf-8", errors="replace"),
+                bool(settings.mqtt_username),
+            )
             return
-        client.subscribe(f"{self.topic_prefix}/+/telemetry")
-        client.subscribe(f"{self.topic_prefix}/+/status")
-        logger.info("MQTT bridge connected and subscribed under %s", self.topic_prefix)
+        client.subscribe(f"{self.topic_prefix}/{settings.mqtt_default_device_id}/telemetry")
+        client.subscribe(f"{self.topic_prefix}/{settings.mqtt_default_device_id}/status")
+        logger.info(
+            "MQTT bridge connected and subscribed to %s/%s",
+            self.topic_prefix,
+            settings.mqtt_default_device_id,
+        )
 
     def _on_disconnect(self, client, userdata, rc) -> None:
         self.connected = False
@@ -108,17 +126,123 @@ class MqttService:
         state = self.devices.setdefault(device_id, DeviceState(device_id=device_id))
         state.last_seen = time.time()
         state.status = payload if isinstance(payload, dict) else {"payload": payload}
+        session_id = str(state.status.get("active_session_id") or "")
+        user_id = str(state.status.get("user_id") or "")
+        if session_id and user_id and str(state.status.get("state", "")).lower() != "idle":
+            from services.sessions import remember_session_owner
+
+            self.session_devices[session_id] = device_id
+            self.device_sessions[device_id] = session_id
+            remember_session_owner(session_id, user_id)
+        elif str(state.status.get("state", "")).lower() == "idle" and not session_id:
+            stale_session_id = self.device_sessions.pop(device_id, None)
+            if stale_session_id and self.session_devices.get(stale_session_id) == device_id:
+                self.session_devices.pop(stale_session_id, None)
+                logger.info(
+                    "Cleared stale session mapping for device=%s session=%s (device reports idle)",
+                    device_id,
+                    stale_session_id,
+                )
 
     def record_telemetry(self, device_id: str, payload: dict[str, Any]) -> dict:
         state = self.devices.setdefault(device_id, DeviceState(device_id=device_id))
         state.last_seen = time.time()
         state.last_telemetry = state.last_seen
-        data = process_telemetry(payload, device_id=device_id)
+        payload = self._enrich_payload_from_device_state(device_id, payload)
+        incoming_session_id = str(payload.get("session_id") or "")
+        if incoming_session_id and (device_id, incoming_session_id) in self.unknown_sessions_stopped:
+            logger.debug(
+                "Ignoring telemetry for already-stopped unknown session=%s device=%s",
+                incoming_session_id,
+                device_id,
+            )
+            return {
+                "session_id": incoming_session_id,
+                "device_id": device_id,
+                "ignored": True,
+                "reason": "unknown_session",
+            }
+
+        try:
+            data = process_telemetry(payload, device_id=device_id)
+        except ValueError as error:
+            if "No user mapping found for telemetry session" not in str(error):
+                raise
+            return self.stop_unknown_session(device_id, payload, error)
+
         session_id = data.get("session_id")
         if session_id:
             self.session_devices[str(session_id)] = device_id
             self.device_sessions[device_id] = str(session_id)
         return data
+
+    def _enrich_payload_from_device_state(self, device_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(payload, dict):
+            return payload
+
+        enriched = dict(payload)
+        state = self.devices.get(device_id)
+        status = state.status if state else {}
+        status_session_id = str(status.get("active_session_id") or "")
+        status_user_id = str(status.get("user_id") or "")
+
+        if not enriched.get("session_id") and status_session_id:
+            enriched["session_id"] = status_session_id
+        if not enriched.get("user_id") and status_user_id:
+            enriched["user_id"] = status_user_id
+
+        return enriched
+
+    def stop_unknown_session(
+        self,
+        device_id: str,
+        payload: dict[str, Any],
+        error: Exception | None = None,
+    ) -> dict[str, Any]:
+        session_id = str(payload.get("session_id") or "")
+        if not session_id:
+            raise error or ValueError("No user mapping found for telemetry without a session id")
+
+        key = (device_id, session_id)
+        if key in self.unknown_sessions_stopped:
+            logger.debug("Ignoring repeated telemetry for stopped unknown session=%s device=%s", session_id, device_id)
+            return {
+                "session_id": session_id,
+                "device_id": device_id,
+                "ignored": True,
+                "reason": "unknown_session",
+            }
+
+        self.unknown_sessions_stopped.add(key)
+        logger.warning(
+            "Telemetry received for unknown session=%s device=%s; sending STOP_PROFILE so the ESP32 can return to idle",
+            session_id,
+            device_id,
+        )
+
+        if not self.client or not self.connected:
+            return {
+                "session_id": session_id,
+                "device_id": device_id,
+                "ignored": True,
+                "reason": "unknown_session_mqtt_disconnected",
+            }
+
+        topic = f"{self.topic_prefix}/{device_id}/command"
+        command = {
+            "type": "STOP_PROFILE",
+            "session_id": session_id,
+            "device_id": device_id,
+            "command": {"reason": "unknown_session_after_backend_restart"},
+        }
+        self.client.publish(topic, json.dumps(command), qos=1)
+        self.clear_active_session(str(session_id))
+        return {
+            "session_id": session_id,
+            "device_id": device_id,
+            "ignored": True,
+            "reason": "unknown_session_stop_sent",
+        }
 
     def reserve_device_for_session(self, session_id: str, device_id: str | None = None) -> str:
         resolved = device_id or self.find_available_device_id()
@@ -137,15 +261,19 @@ class MqttService:
         device_id = self.session_devices.pop(session_id, None)
         if device_id and self.device_sessions.get(device_id) == session_id:
             self.device_sessions.pop(device_id, None)
+        self.unknown_sessions_stopped = {
+            key for key in self.unknown_sessions_stopped if key[1] != session_id
+        }
 
     def active_session_for_device(self, device_id: str) -> str | None:
         local_session_id = self.device_sessions.get(device_id)
+        state = self.devices.get(device_id)
+        if not state:
+            return local_session_id
+        if not self._is_fresh(state.last_seen):
+            return None
         if local_session_id:
             return local_session_id
-
-        state = self.devices.get(device_id)
-        if not state or not self._is_fresh(state.last_seen):
-            return None
 
         reported_session_id = state.status.get("active_session_id")
         reported_state = str(state.status.get("state", "")).lower()
@@ -183,6 +311,16 @@ class MqttService:
             }
             for device_id, state in self.devices.items()
         }
+        active_session_devices = {
+            session_id: device_id
+            for session_id, device_id in self.session_devices.items()
+            if self.active_session_for_device(device_id) == session_id
+        }
+        active_device_sessions = {
+            device_id: session_id
+            for device_id, session_id in self.device_sessions.items()
+            if self.active_session_for_device(device_id) == session_id
+        }
         fresh_telemetry = any(
             state.last_telemetry
             and self._is_fresh(state.last_telemetry, now)
@@ -199,8 +337,8 @@ class MqttService:
             "broker_resolved": f"{self.broker_host}:{settings.mqtt_port}",
             "topic_prefix": self.topic_prefix,
             "devices": devices,
-            "active_sessions": self.session_devices,
-            "device_sessions": self.device_sessions,
+            "active_sessions": active_session_devices,
+            "device_sessions": active_device_sessions,
         }
 
     def _resolve_broker_host(self, host: str) -> str:
@@ -234,6 +372,16 @@ class MqttService:
         if timestamp is None:
             return False
         return (now or time.time()) - timestamp <= settings.mqtt_heartbeat_stale_seconds
+
+    def _connect_return_code_name(self, rc: int) -> str:
+        return {
+            0: "accepted",
+            1: "unacceptable protocol version",
+            2: "identifier rejected",
+            3: "server unavailable",
+            4: "bad username or password",
+            5: "not authorized",
+        }.get(rc, "unknown")
 
 
 mqtt_service = MqttService()

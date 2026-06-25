@@ -1389,6 +1389,21 @@ h3 {
   color: #117a47;
 }
 
+.metric.cold {
+  border-color: rgba(96, 165, 250, 0.42);
+  background: linear-gradient(180deg, #eff6ff, #dbeafe);
+  box-shadow: 0 12px 26px rgba(96, 165, 250, 0.1);
+}
+
+.metric.cold .metric-icon {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.metric.cold strong {
+  color: #1d4ed8 !important;
+}
+
 .metric.warn {
   border-color: rgba(245, 158, 11, 0.42);
   background: linear-gradient(180deg, #fffbeb, #fff7d6);
@@ -5778,6 +5793,21 @@ input:not([type="checkbox"]), select, textarea, .mode-actions button, .preset-ro
 :root[data-theme='dark'] .metric.good .metric-icon {
   background: rgba(52, 211, 153, 0.16) !important;
   color: #86efac !important;
+}
+
+:root[data-theme='dark'] .metric.cold {
+  background: linear-gradient(180deg, rgba(30, 58, 138, 0.34), rgba(29, 78, 216, 0.26)) !important;
+  border-color: rgba(96, 165, 250, 0.38) !important;
+  box-shadow: 0 12px 26px rgba(96, 165, 250, 0.08);
+}
+
+:root[data-theme='dark'] .metric.cold strong {
+  color: #93c5fd !important;
+}
+
+:root[data-theme='dark'] .metric.cold .metric-icon {
+  background: rgba(96, 165, 250, 0.18) !important;
+  color: #93c5fd !important;
 }
 
 :root[data-theme='dark'] .metric.warn .metric-icon {

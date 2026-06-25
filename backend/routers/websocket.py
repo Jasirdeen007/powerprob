@@ -34,33 +34,40 @@ async def receive_telemetry(packet: TelemetryPacket):
     return {"status": "accepted", "packet": data}
 
 
-@router.post("/pi/command")
-async def send_pi_command(command: CommandPayload):
+async def send_esp32_command_payload(command: CommandPayload):
     payload = command.model_dump(exclude_none=True)
     sent = mqtt_service.publish_command(command.session_id, payload, device_id=command.device_id)
-    if not sent:
-        sent = await pi_ws_manager.send_command(payload)
     if not sent:
         raise HTTPException(
             status_code=503,
             detail={
-                "message": "Command was not sent to the Raspberry Pi.",
+                "message": "Command was not sent to the ESP32.",
                 "session_id": command.session_id,
                 "device_id": command.device_id,
-                "hint": "Check /pi/status, Pi service logs, and MQTT broker connectivity.",
+                "hint": "Check /esp32/status, ESP32 serial logs, and MQTT broker connectivity.",
             },
         )
     return {"sent": sent, "command": payload}
 
 
+@router.post("/esp32/command")
+async def send_esp32_command(command: CommandPayload):
+    return await send_esp32_command_payload(command)
+
+
+@router.post("/pi/command")
+async def send_pi_command(command: CommandPayload):
+    return await send_esp32_command_payload(command)
+
+
+@router.get("/esp32/status")
+async def get_esp32_status():
+    return mqtt_service.status()
+
+
 @router.get("/pi/status")
 async def get_pi_status():
-    status = mqtt_service.status()
-    if not status["connected"]:
-        websocket_status = pi_ws_manager.status()
-        if websocket_status.get("connected"):
-            return websocket_status
-    return status
+    return mqtt_service.status()
 
 
 @router.get("/telemetry/live")

@@ -12,7 +12,7 @@ function securityHeadersPlugin() {
         res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
         res.setHeader(
           "Content-Security-Policy",
-          "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://*.firebaseio.com; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:8000 http://localhost:8000 https://*.firebaseio.com https://*.googleapis.com https://*.firebaseapp.com https://accounts.google.com; frame-src 'self' blob: https://streamable.com https://*.streamable.com https://accounts.google.com https://*.google.com https://*.firebaseapp.com; img-src 'self' data: blob: https://*.googleusercontent.com; font-src 'self' data:;"
+          "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://*.firebaseio.com; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:8000 http://localhost:8000 http://127.0.0.1:8001 http://localhost:8001 https://*.firebaseio.com https://*.googleapis.com https://*.firebaseapp.com https://accounts.google.com; frame-src 'self' blob: https://streamable.com https://*.streamable.com https://accounts.google.com https://*.google.com https://*.firebaseapp.com; img-src 'self' data: blob: https://*.googleusercontent.com; font-src 'self' data:;"
         );
         next();
       });
@@ -25,6 +25,13 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5173,
-    strictPort: true
+    strictPort: true,
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8001",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, "")
+      }
+    }
   }
 });

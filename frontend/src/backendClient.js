@@ -51,8 +51,8 @@ export function endSession(sessionId, userId) {
   });
 }
 
-export function sendPiCommand({ type, sessionId, deviceId, command = {} }) {
-  return request("/pi/command", {
+export function sendEsp32Command({ type, sessionId, deviceId, command = {} }) {
+  return request("/esp32/command", {
     method: "POST",
     body: JSON.stringify({
       type,
@@ -63,8 +63,8 @@ export function sendPiCommand({ type, sessionId, deviceId, command = {} }) {
   });
 }
 
-export function getPiStatus() {
-  return request("/pi/status");
+export function getEsp32Status() {
+  return request("/esp32/status");
 }
 
 export function getLiveTelemetry(userId, { scope = "user" } = {}) {

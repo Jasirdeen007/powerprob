@@ -54,6 +54,8 @@ const COLORS = {
 
 function getStatusColor(metric, value) {
   if (metric === "temperature") {
+    if (value < 0) return "#60a5fa";
+    if (value < 10) return COLORS.warning;
     if (value < 45) return COLORS.safe;
     if (value < 50) return COLORS.stable;
     if (value < 55) return COLORS.warning;

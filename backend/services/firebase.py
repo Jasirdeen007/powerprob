@@ -40,7 +40,10 @@ def get_firebase_app():
         return firebase_admin.get_app()
 
     service_account_path = Path(settings.firebase_service_account_path)
+    if not service_account_path.is_absolute():
+        service_account_path = Path(__file__).resolve().parents[1] / service_account_path
     if not service_account_path.exists():
+        firebase_diagnostics["last_error"] = f"Firebase service account file not found: {service_account_path}"
         return None
 
     cred = credentials.Certificate(str(service_account_path))
@@ -188,6 +191,28 @@ def list_sessions(user_id: str) -> list[dict[str, Any]]:
     except Exception as error:
         logger.warning("Failed to list sessions from Firestore: %s", error)
         return []
+
+
+def find_session_owner(session_id: str) -> dict[str, Any] | None:
+    try:
+        client = get_firestore_client()
+        if not client:
+            return None
+
+        docs = (
+            client.collection_group("sessions")
+            .where("session_id", "==", session_id)
+            .limit(1)
+            .stream()
+        )
+        for doc in docs:
+            data = doc.to_dict() or {}
+            user_id = data.get("user_id") or doc.reference.parent.parent.id
+            return {"user_id": user_id, "session": data}
+        return None
+    except Exception as error:
+        logger.warning("Failed to find session owner from Firestore: %s", error)
+        return None
 
 
 def query_historical(session_id: str, start: str | None, end: str | None, user_id: str) -> list[dict[str, Any]]:

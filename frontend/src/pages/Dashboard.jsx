@@ -20,6 +20,8 @@ const ZERO_READING = {
   status: "healthy"
 };
 
+const LIVE_TELEMETRY_STALE_MS = 15000;
+
 const GLOBAL_CHART_TYPES = [
   { key: "line", label: "Line" },
   { key: "area", label: "Area" },
@@ -43,10 +45,13 @@ function getMetricTone(metricKey, value, operationMode = "discharge") {
     if (operationMode === "charge") {
       if (n > 45) return "danger";
       if (n > 40) return "warn";
-      return n >= 0 ? "good" : "neutral";
+      if (n < 0) return "cold";
+      return "good";
     }
     if (n > 60) return "danger";
     if (n >= 50) return "warn";
+    if (n < 0) return "cold";
+    if (n < 10) return "warn";
     return n >= 20 ? "good" : "warn";
   }
   if (metricKey === "voltage") {
@@ -68,10 +73,17 @@ function getMetricTone(metricKey, value, operationMode = "discharge") {
   return "good";
 }
 
-function isRealPiReading(reading) {
+function isRealEsp32Reading(reading) {
   if (!reading) return false;
   if (reading.timestamp) return true;
   return [reading.voltage, reading.current, reading.temperature].some((value) => Number(value) !== 0);
+}
+
+function isFreshEsp32Reading(reading) {
+  if (!isRealEsp32Reading(reading)) return false;
+  if (!reading.timestamp) return true;
+  const timestampMs = new Date(reading.timestamp).getTime();
+  return Number.isFinite(timestampMs) && Date.now() - timestampMs <= LIVE_TELEMETRY_STALE_MS;
 }
 
 function escapeHtml(value) {
@@ -152,7 +164,7 @@ function buildReportLineChart(readings, metricKey, label, unit, color = "#2563eb
   `;
 }
 
-function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, activeSession = {}, profiles = [], onStartSession, onEndSession, onPauseSession, piStatus, userId }) {
+function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery, activeSession = {}, profiles = [], onStartSession, onEndSession, onPauseSession, piStatus, userId }) {
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [chargeConfigModalOpen, setChargeConfigModalOpen] = useState(false);
   const [operationMode, setOperationMode] = useState("discharge");
@@ -192,13 +204,12 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
     setShowDemoBanner(false);
   };
 
-  const piConnected = Boolean(piStatus?.connected);
+  const esp32Connected = Boolean(piStatus?.connected);
   const liveReadings = Array.isArray(liveStream) ? liveStream : [];
   const activeSessionId = activeSession.sessionId ?? "";
   const activeDeviceId = activeSession.deviceId ?? "";
   const isRunning = Boolean(activeSession.isRunning);
   const isPaused = Boolean(activeSession.isPaused);
-  const isDemoSession = Boolean(activeSession.isDemo);
   const activeSessionMap = piStatus?.active_sessions ?? {};
   const deviceSessionMap = piStatus?.device_sessions ?? {};
   const deviceEntries = Object.entries(piStatus?.devices ?? {});
@@ -215,27 +226,22 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
   const visibleDeviceState = piStatus?.devices?.[visibleDeviceId]?.status?.state
     ?? deviceEntries.find(([, device]) => device?.active_session_id === visibleSessionId)?.[1]?.status?.state
     ?? "";
-  const isPiBusy = Boolean(visibleSessionId);
+  const isEsp32Busy = Boolean(visibleSessionId) && esp32Connected;
   const ownsVisibleSession = Boolean(activeSessionId && activeSessionId === visibleSessionId);
-  const reportedPiPaused = String(visibleDeviceState).toLowerCase() === "paused";
-  const isPiPaused = ownsVisibleSession ? Boolean(isPaused) : reportedPiPaused;
-  const controlPaused = Boolean(ownsVisibleSession ? isPaused : isPiPaused);
+  const reportedEsp32Paused = String(visibleDeviceState).toLowerCase() === "paused";
+  const isEsp32Paused = ownsVisibleSession ? Boolean(isPaused) : reportedEsp32Paused;
+  const controlPaused = Boolean(ownsVisibleSession ? isPaused : isEsp32Paused);
   const activeSessionReadings = visibleSessionId
     ? liveReadings.filter((reading) => reading.sessionId === visibleSessionId)
     : [];
-  const hasPiTelemetry = Boolean(
-    piConnected &&
+  const hasEsp32Telemetry = Boolean(
+    esp32Connected &&
     visibleSessionId &&
-    !isPiPaused &&
-    activeSessionReadings.some(isRealPiReading)
+    !isEsp32Paused &&
+    activeSessionReadings.some(isFreshEsp32Reading) &&
+    piStatus?.telemetry_active
   );
-  const hasDemoTelemetry = Boolean(
-    isDemoSession &&
-    visibleSessionId &&
-    !isPaused &&
-    activeSessionReadings.some(isRealPiReading)
-  );
-  const hasLiveTelemetry = hasPiTelemetry || hasDemoTelemetry;
+  const hasLiveTelemetry = hasEsp32Telemetry;
   const fullReadings = hasLiveTelemetry ? activeSessionReadings : [ZERO_READING];
 
   const profileSpecs = {
@@ -309,29 +315,25 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
   const socTone = getMetricTone("soc", readings[readings.length - 1]?.soc ?? activeLivePoint.soc, operationMode);
   const sohTone = getMetricTone("soh", readings[readings.length - 1]?.soh ?? activeLivePoint.soh, operationMode);
   const tone = temperatureTone === "danger" ? "danger" : temperatureTone === "warn" ? "warn" : "good";
-  const PiStatusIcon = piConnected ? Wifi : WifiOff;
-  const piStatusLabel = hasDemoTelemetry
-    ? "Demo data running"
-    : hasPiTelemetry
-    ? "Pi data receiving"
-    : isPiPaused
-      ? "Pi paused"
-      : isPiBusy
-        ? "Pi in use"
-        : piConnected
-          ? "Pi available"
-          : "Pi unavailable";
-  const piStatusDetail = hasDemoTelemetry
-    ? "Pi is unavailable, so bundled demo telemetry is updating the dashboard"
-    : hasPiTelemetry
+  const Esp32StatusIcon = esp32Connected ? Wifi : WifiOff;
+  const esp32StatusLabel = hasEsp32Telemetry
+    ? "ESP32 data receiving"
+    : isEsp32Paused
+      ? "ESP32 paused"
+      : isEsp32Busy
+        ? "ESP32 in use"
+        : esp32Connected
+          ? "ESP32 available"
+          : "ESP32 unavailable";
+  const esp32StatusDetail = hasEsp32Telemetry
     ? "Live telemetry is updating the dashboard"
-    : isPiPaused
+    : isEsp32Paused
       ? "Telemetry is paused for the active session"
-      : isPiBusy
-        ? `Session ${visibleSessionId} is using ${visibleDeviceId || "the Pi"}`
-    : piConnected
-      ? "Pi is connected, waiting for telemetry packets"
-      : "Waiting for Raspberry Pi telemetry bridge";
+      : isEsp32Busy
+        ? `Session ${visibleSessionId} is using ${visibleDeviceId || "the ESP32"}`
+    : esp32Connected
+      ? "ESP32 is connected, waiting for telemetry packets"
+      : "Waiting for ESP32 telemetry bridge";
 
   const profileDescriptions = {
     "Surveillance Drone": "Surveillance Drone: Hover, camera sweep, return, and controlled landing",
@@ -418,7 +420,8 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
   };
 
   const handleExportDashboardPdf = () => {
-    const reportReadings = hasLiveTelemetry
+    const hasRealData = readings.some((r) => r.voltage !== 0 || r.current !== 0 || r.temperature !== 0);
+    const reportReadings = hasRealData
       ? readings
       : (selectedSession?.readings?.length ? selectedSession.readings : readings);
     const latestReportPoint = reportReadings.at(-1) ?? activeLivePoint;
@@ -527,7 +530,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
               <div class="status-card"><span>Session</span><strong>${escapeHtml(visibleSessionId || selectedSession?.sessionId || "No active session")}</strong></div>
               <div class="status-card"><span>Status</span><strong>${escapeHtml(reportStatus)}</strong></div>
               <div class="status-card"><span>Battery</span><strong>${escapeHtml(activeBattery || selectedSession?.batteryId || "Unknown")}</strong></div>
-              <div class="status-card"><span>Source</span><strong>${escapeHtml(hasPiTelemetry ? "Raspberry Pi" : hasDemoTelemetry ? "Demo fallback" : selectedSession?.sourceFile || "Dashboard snapshot")}</strong></div>
+              <div class="status-card"><span>Source</span><strong>${escapeHtml(hasEsp32Telemetry ? "ESP32" : selectedSession?.sourceFile || "Dashboard snapshot")}</strong></div>
             </section>
 
             <section class="two-col">
@@ -624,12 +627,12 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             <button
               className={`btn-run ${isRunning && !controlPaused ? "active" : ""}`}
               onClick={handleRun}
-              disabled={sessionPending || Boolean(activeSessionId) || isPiBusy}
+              disabled={sessionPending || Boolean(activeSessionId) || isEsp32Busy}
               type="button"
               aria-label="Start telemetry session"
             >
               <Play size={16} fill="currentColor" />
-              {pendingAction === "start" ? "Starting..." : isPiBusy && !ownsVisibleSession ? "Pi busy" : "Run"}
+              {pendingAction === "start" ? "Starting..." : isEsp32Busy && !ownsVisibleSession ? "ESP32 busy" : "Run"}
             </button>
 
             <button
@@ -665,7 +668,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
 
       {visibleSessionId && (
         <div className="session-info">
-          <p>{ownsVisibleSession ? "Active session" : "Pi in use"}: <strong>{visibleSessionId}</strong></p>
+          <p>{ownsVisibleSession ? "Active session" : "ESP32 in use"}: <strong>{visibleSessionId}</strong></p>
         </div>
       )}
 
@@ -684,12 +687,12 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
         </div>
       </section>
 
-      <section className={`pi-status-banner ${piConnected ? "connected" : "unavailable"}`} aria-label="Raspberry Pi connection status">
+      <section className={`pi-status-banner ${esp32Connected ? "connected" : "unavailable"}`} aria-label="ESP32 connection status">
         <div className="pi-status-main">
-          <PiStatusIcon size={22} aria-hidden="true" />
+          <Esp32StatusIcon size={22} aria-hidden="true" />
           <div>
-            <strong>{piStatusLabel}</strong>
-            <span>{piStatusDetail}</span>
+            <strong>{esp32StatusLabel}</strong>
+            <span>{esp32StatusDetail}</span>
           </div>
         </div>
       </section>

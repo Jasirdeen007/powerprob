@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Info, LayoutPanelTop, X } from "lucide-react";
 import Header from "./components/Header";
 import SessionTimeoutWarning from "./components/SessionTimeoutWarning";
-import { endSession, getHistorical, getLiveTelemetry, getPiStatus, getProfiles, getSessions, sendPiCommand, startSession } from "./backendClient";
+import { endSession, getEsp32Status, getHistorical, getLiveTelemetry, getProfiles, getSessions, sendEsp32Command, startSession } from "./backendClient";
 import { appUser } from "./data/appConfig";
 import {
   authEnabled,
@@ -71,38 +71,6 @@ function makeZeroLiveReading(batteryId) {
         status: "healthy"
       }
     ]
-  };
-}
-
-function makeDemoSessionId(batteryId) {
-  return `DEMO_${batteryId}_${Date.now()}`;
-}
-
-function getDemoSessionForBattery(batteryId) {
-  return (
-    localDemoData.testSessions.find((session) => session.batteryId === batteryId && session.readings?.length > 0) ??
-    localDemoData.testSessions.find((session) => session.readings?.length > 0)
-  );
-}
-
-function makeDemoReading(rawReading, sessionId, index) {
-  const voltage = Number(rawReading?.voltage ?? 0);
-  const current = Math.abs(Number(rawReading?.current ?? 0));
-  const temperature = Math.max(24, Number(rawReading?.temperature ?? 0) + 20);
-  const soc = Math.round(clamp(((voltage - 3) / 1.25) * 100, 0, 100));
-  const soh = Number((99.5 - Math.min(index, 300) * 0.01).toFixed(2));
-
-  return {
-    time: index,
-    voltage,
-    current,
-    temperature,
-    timestamp: new Date().toISOString(),
-    sessionId,
-    soc,
-    soh,
-    power: Number((voltage * current).toFixed(2)),
-    status: temperature >= 45 ? "critical" : temperature >= 38 ? "warning" : "healthy"
   };
 }
 
@@ -185,7 +153,7 @@ function appendLiveReadingsToSessions(currentSessions = [], incomingLiveReadings
       type: incoming.mode ?? current?.type ?? "DISCHARGE",
       startTime: current?.startTime ?? point.timestamp ?? new Date().toISOString(),
       status: incoming.status ?? current?.status ?? "running",
-      sourceFile: current?.sourceFile ?? "pi-live",
+      sourceFile: current?.sourceFile ?? "esp32-live",
       readings: isDuplicate ? currentReadings : [...currentReadings, point]
     });
   }
@@ -242,17 +210,19 @@ function App() {
   const [piStatus, setPiStatus] = useState({
     connected: false,
     transport: "websocket",
-    endpoint: "/ws/pi"
+    endpoint: "/esp32/status"
   });
   const [activeRun, setActiveRun] = useState({
     sessionId: "",
     deviceId: "",
     isRunning: false,
-    isPaused: false
+    isPaused: false,
+    createdAt: 0
   });
   
   const failedAttemptsRef = useRef(0);
   const lockoutUntilRef = useRef(0);
+  const statusMissCountRef = useRef(0);
   const [isLockedOut, setIsLockedOut] = useState(false);
   const [lockoutRemaining, setLockoutRemaining] = useState(0);
   
@@ -410,20 +380,6 @@ function App() {
             ...current,
             testSessions: mergeSessions(current?.testSessions ?? [], backendSessions)
           }));
-
-          const runningSession = backendSessions.find((session) => session.status === "running");
-          if (runningSession) {
-            setActiveRun((current) => (
-              current.sessionId
-                ? current
-                : {
-                  sessionId: runningSession.sessionId,
-                  deviceId: runningSession.deviceId ?? "",
-                  isRunning: true,
-                  isPaused: false
-                }
-            ));
-          }
         }
       } catch (error) {
         console.warn("Backend catalog load failed; using available Firebase/demo data.", error);
@@ -440,25 +396,54 @@ function App() {
   useEffect(() => {
     let cancelled = false;
 
-    async function refreshPiStatus() {
+    async function refreshEsp32Status() {
       try {
-        const status = await getPiStatus();
+        const status = await getEsp32Status();
         if (!cancelled) {
           setPiStatus(status);
+          const activeSessionIds = new Set([
+            ...Object.keys(status?.active_sessions ?? {}),
+            ...Object.values(status?.device_sessions ?? {}),
+            ...Object.values(status?.devices ?? {}).map((device) => device?.active_session_id)
+          ].filter(Boolean));
+          const anyDeviceFresh = Object.values(status?.devices ?? {}).some((d) => d?.available);
+          setActiveRun((current) => {
+            if (!current.sessionId) {
+              statusMissCountRef.current = 0;
+              return current;
+            }
+            if (current.createdAt && Date.now() - current.createdAt < 10000) return current;
+            const sessionConfirmed = activeSessionIds.has(current.sessionId) && anyDeviceFresh;
+            if (sessionConfirmed) {
+              statusMissCountRef.current = 0;
+              return current;
+            }
+            statusMissCountRef.current += 1;
+            if (statusMissCountRef.current >= 3) {
+              statusMissCountRef.current = 0;
+              return { sessionId: "", deviceId: "", isRunning: false, isPaused: false, createdAt: 0 };
+            }
+            return current;
+          });
         }
       } catch (error) {
         if (!cancelled) {
           setPiStatus({
             connected: false,
-            transport: "websocket",
-            endpoint: "/ws/pi"
+            transport: "mqtt",
+            endpoint: "/esp32/status"
           });
+          statusMissCountRef.current += 1;
+          if (statusMissCountRef.current >= 3) {
+            statusMissCountRef.current = 0;
+            setActiveRun({ sessionId: "", deviceId: "", isRunning: false, isPaused: false, createdAt: 0 });
+          }
         }
       }
     }
 
-    refreshPiStatus();
-    const intervalId = window.setInterval(refreshPiStatus, 5000);
+    refreshEsp32Status();
+    const intervalId = window.setInterval(refreshEsp32Status, 5000);
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
@@ -466,60 +451,9 @@ function App() {
   }, [userId]);
 
   useEffect(() => {
-    if (!activeRun.isDemo || !activeRun.sessionId || activeRun.isPaused) return undefined;
-
-    const demoSession = getDemoSessionForBattery(activeRun.batteryId);
-    const sourceReadings = demoSession?.readings ?? [];
-    if (sourceReadings.length === 0) return undefined;
-
-    let cursor = 0;
-    const intervalId = window.setInterval(() => {
-      const batteryId = activeRun.batteryId || demoSession.batteryId || initialBattery;
-      const point = makeDemoReading(sourceReadings[cursor % sourceReadings.length], activeRun.sessionId, cursor);
-      cursor += 1;
-
-      setData((current) => {
-        if (!current) return current;
-        const currentLive = current.liveReadings?.[batteryId] ?? makeZeroLiveReading(batteryId);
-        const nextStream = [...(currentLive.stream ?? []), point].slice(-300);
-
-        return {
-          ...current,
-          liveReadings: {
-            ...(current.liveReadings ?? {}),
-            [batteryId]: {
-              ...currentLive,
-              batteryId,
-              batteryName: activeRun.batteryName ?? "",
-              sessionId: activeRun.sessionId,
-              mode: activeRun.mode ?? "DISCHARGE",
-              status: point.status,
-              soh: point.soh,
-              stream: nextStream
-            }
-          },
-          testSessions: (current.testSessions ?? []).map((session) => (
-            session.sessionId === activeRun.sessionId
-              ? {
-                ...session,
-                readings: [...(session.readings ?? []), point].slice(-300)
-              }
-              : session
-          ))
-        };
-      });
-      setDashboardBattery(batteryId);
-    }, 1000);
-
-    return () => window.clearInterval(intervalId);
-  }, [activeRun, initialBattery]);
-
-  useEffect(() => {
     let cancelled = false;
 
     async function refreshBackendLiveTelemetry() {
-      if (activeRun.isDemo) return;
-
       try {
         const payload = await getLiveTelemetry(userId, { scope: "all" });
         const liveReadings = backendTelemetryToLiveReadings(payload.telemetry ?? {});
@@ -552,7 +486,7 @@ function App() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [activeRun.isDemo, dashboardBattery, initialBattery, userId]);
+  }, [dashboardBattery, initialBattery, userId]);
 
   useEffect(() => {
     if (!authEnabled) return undefined;
@@ -738,7 +672,7 @@ function App() {
     setAuthView("landing");
     setCurrentUser(appUser);
     setActivePage("dashboard");
-    setActiveRun({ sessionId: "", deviceId: "", isRunning: false, isPaused: false });
+    setActiveRun({ sessionId: "", deviceId: "", isRunning: false, isPaused: false, createdAt: 0 });
   }
 
   function handleStaySignedIn() {
@@ -770,60 +704,13 @@ function App() {
   }
 
   async function handleStartSession(payload) {
-    if (!piStatus?.connected) {
-      const demoSession = getDemoSessionForBattery(payload.battery_id);
-      const batteryId = payload.battery_id || demoSession?.batteryId || initialBattery;
-      const sessionId = makeDemoSessionId(batteryId);
-      const response = {
-        session_id: sessionId,
-        device_id: "demo-fallback",
-        status: "running",
-        fallback: "demo"
-      };
-
-      setActiveRun({
-        sessionId,
-        deviceId: "demo-fallback",
-        isRunning: true,
-        isPaused: false,
-        isDemo: true,
-        batteryId,
-        batteryName: payload.battery_name ?? "",
-        mode: payload.config?.discharge_profile ?? "DISCHARGE"
-      });
-
-      const nextSession = {
-        sessionId,
-        batteryId,
-        batteryName: payload.battery_name ?? "",
-        deviceId: "demo-fallback",
-        type: payload.config?.discharge_profile ?? "demo",
-        startTime: new Date().toISOString(),
-        status: "running",
-        sourceFile: "demo-fallback",
-        readings: []
-      };
-
-      setData((current) => ({
-        ...current,
-        liveReadings: {
-          ...(current?.liveReadings ?? {}),
-          [batteryId]: makeZeroLiveReading(batteryId)
-        },
-        testSessions: [nextSession, ...(current?.testSessions ?? [])]
-      }));
-
-      setSelectedBattery(batteryId);
-      setDashboardBattery(batteryId);
-      return response;
-    }
-
     const response = await startSession({ ...payload, user_id: userId });
     setActiveRun({
       sessionId: response.session_id,
       deviceId: response.device_id ?? "",
       isRunning: true,
-      isPaused: false
+      isPaused: false,
+      createdAt: Date.now()
     });
     const nextSession = {
       sessionId: response.session_id,
@@ -847,46 +734,7 @@ function App() {
   }
 
   async function handleEndSession(sessionId) {
-    if (activeRun.isDemo && activeRun.sessionId === sessionId) {
-      const stoppedBatteryId = activeRun.batteryId ?? dashboardBattery ?? initialBattery;
-      const response = {
-        session_id: sessionId,
-        status: "completed",
-        command_sent: true,
-        fallback: "demo"
-      };
-
-      setData((current) => ({
-        ...current,
-        liveReadings: {
-          ...(current?.liveReadings ?? {}),
-          [stoppedBatteryId]: makeZeroLiveReading(stoppedBatteryId)
-        },
-        testSessions: (current?.testSessions ?? []).map((session) => (
-          session.sessionId === sessionId
-            ? {
-              ...session,
-              status: "completed",
-              endedAt: new Date().toISOString()
-            }
-            : session
-        ))
-      }));
-      setDashboardBattery(stoppedBatteryId);
-      setActiveRun({
-        sessionId: "",
-        deviceId: "",
-        isRunning: false,
-        isPaused: false,
-        isDemo: false
-      });
-      return response;
-    }
-
     const response = await endSession(sessionId, userId);
-    if (response.command_sent === false) {
-      throw new Error("Stop command was not sent to the Raspberry Pi.");
-    }
     const stoppedSession = data?.testSessions?.find((session) => session.sessionId === sessionId);
     const stoppedBatteryId = stoppedSession?.batteryId ?? dashboardBattery ?? initialBattery;
     let finalizedPackets = [];
@@ -928,7 +776,7 @@ function App() {
   }
 
   async function handlePauseSession(sessionId, paused, deviceId) {
-    const response = await sendPiCommand({
+    const response = await sendEsp32Command({
       type: paused ? "PAUSE_PROFILE" : "RESUME_PROFILE",
       sessionId,
       deviceId,
@@ -1017,7 +865,6 @@ function App() {
             onEndSession={handleEndSession}
             onPauseSession={handlePauseSession}
             piStatus={piStatus}
-            piConnected={piStatus.connected}
             userId={userId}
           />
         )}

@@ -33,6 +33,10 @@ class TelemetryPacket(BaseModel):
     cell_voltage: CellVoltage | None = None
     current: float | None = None
     temperature: Temperature
+    phase: str | None = None
+    setpoint_current: float | None = None
+    shunt_voltage_mv: float | None = None
+    pwm_duty: int | None = None
     event: str = ""
 
     @model_validator(mode="after")

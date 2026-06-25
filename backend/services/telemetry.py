@@ -25,12 +25,14 @@ def normalize_telemetry_payload(payload: dict) -> dict:
 
 def process_telemetry(payload: dict, device_id: str | None = None) -> dict:
     packet = TelemetryPacket.model_validate(normalize_telemetry_payload(payload))
-    from services.sessions import get_session_user_id
+    from services.sessions import get_session_user_id, remember_session_owner
 
-    user_id = packet.user_id or get_session_user_id(packet.session_id)
+    packet_user_id = packet.user_id.strip() if packet.user_id else ""
+    user_id = packet_user_id or get_session_user_id(packet.session_id)
     if not user_id:
         logger.warning("Telemetry ignored for unknown user session=%s device=%s", packet.session_id, device_id)
         raise ValueError(f"No user mapping found for telemetry session {packet.session_id}")
+    remember_session_owner(packet.session_id, user_id)
 
     enriched = enrich_packet(packet)
     data = enriched.model_dump(mode="json")

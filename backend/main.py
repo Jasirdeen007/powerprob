@@ -45,7 +45,7 @@ def stop_mqtt_bridge():
 @app.middleware("http")
 async def log_requests(request, call_next):
     response = await call_next(request)
-    if request.url.path not in {"/health", "/pi/status"}:
+    if request.url.path not in {"/health", "/esp32/status", "/pi/status"}:
         logger.info("%s %s -> %s", request.method, request.url.path, response.status_code)
     return response
 
