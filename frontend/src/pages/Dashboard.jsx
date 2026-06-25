@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Activity, Eye, EyeOff, FileText, Flame, Gauge, Play, Pause, Square, Zap, BatteryFull, Settings, Wifi, WifiOff } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Activity, Eye, EyeOff, FileText, Flame, Gauge, Play, Pause, Square, Zap, BatteryFull, Settings, Wifi, WifiOff, X } from "lucide-react";
 import MetricCard from "../components/MetricCard";
 import TelemetryChartCard from "../components/TelemetryChartCard";
 import ConfigurationModal from "../components/ConfigurationModal";
@@ -88,11 +88,20 @@ function formatReportNumber(value, digits = 2) {
   return Number.isFinite(n) ? n.toFixed(digits) : "0.00";
 }
 
+function formatReportTimeLabel(reading, index) {
+  if (reading?.timestamp) {
+    return new Date(reading.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+  const seconds = Number(reading?.time ?? index);
+  return Number.isFinite(seconds) ? `T+${Math.round(seconds)}s` : `T+${index}s`;
+}
+
 function buildReportLineChart(readings, metricKey, label, unit, color = "#2563eb") {
   const chartWidth = 680;
-  const chartHeight = 190;
+  const chartHeight = 220;
   const padX = 44;
-  const padY = 28;
+  const padTop = 28;
+  const padBottom = 48;
   const values = readings.map((row) => Number(row?.[metricKey])).filter(Number.isFinite);
   if (values.length === 0) {
     return `<div class="report-chart-empty">No ${escapeHtml(label)} data available.</div>`;
@@ -106,11 +115,24 @@ function buildReportLineChart(readings, metricKey, label, unit, color = "#2563eb
       const value = Number(row?.[metricKey]);
       if (!Number.isFinite(value)) return null;
       const x = padX + (index / Math.max(1, readings.length - 1)) * (chartWidth - padX * 2);
-      const y = chartHeight - padY - ((value - min) / range) * (chartHeight - padY * 2);
+      const y = chartHeight - padBottom - ((value - min) / range) * (chartHeight - padTop - padBottom);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .filter(Boolean)
     .join(" ");
+  const tickIndexes = Array.from(new Set([
+    0,
+    Math.floor((readings.length - 1) / 2),
+    readings.length - 1
+  ])).filter((index) => index >= 0 && readings[index]);
+  const timeTicks = tickIndexes.map((index) => {
+    const x = padX + (index / Math.max(1, readings.length - 1)) * (chartWidth - padX * 2);
+    const anchor = index === 0 ? "start" : index === readings.length - 1 ? "end" : "middle";
+    return `
+      <line class="report-chart-tick" x1="${x.toFixed(1)}" y1="${chartHeight - padBottom}" x2="${x.toFixed(1)}" y2="${chartHeight - padBottom + 5}" />
+      <text class="report-chart-time" x="${x.toFixed(1)}" y="${chartHeight - 20}" text-anchor="${anchor}">${escapeHtml(formatReportTimeLabel(readings[index], index))}</text>
+    `;
+  }).join("");
 
   return `
     <div class="report-chart-card">
@@ -119,10 +141,11 @@ function buildReportLineChart(readings, metricKey, label, unit, color = "#2563eb
         <span>Min ${formatReportNumber(min)} ${unit} | Max ${formatReportNumber(max)} ${unit}</span>
       </div>
       <svg viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="${escapeHtml(label)} chart">
-        <line x1="${padX}" y1="${chartHeight - padY}" x2="${chartWidth - padX}" y2="${chartHeight - padY}" />
-        <line x1="${padX}" y1="${padY}" x2="${padX}" y2="${chartHeight - padY}" />
+        <line x1="${padX}" y1="${chartHeight - padBottom}" x2="${chartWidth - padX}" y2="${chartHeight - padBottom}" />
+        <line x1="${padX}" y1="${padTop}" x2="${padX}" y2="${chartHeight - padBottom}" />
         <text x="${padX}" y="18">${formatReportNumber(max)} ${unit}</text>
-        <text x="${padX}" y="${chartHeight - 6}">${formatReportNumber(min)} ${unit}</text>
+        <text x="${padX}" y="${chartHeight - padBottom + 18}">${formatReportNumber(min)} ${unit}</text>
+        ${timeTicks}
         <polyline points="${points}" style="stroke:${color}" />
       </svg>
     </div>
@@ -155,6 +178,19 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
   const [globalChartType, setGlobalChartType] = useState("line");
   const [globalChartVersion, setGlobalChartVersion] = useState(0);
   const [focusedMetric, setFocusedMetric] = useState("");
+  const [showDemoBanner, setShowDemoBanner] = useState(false);
+
+  useEffect(() => {
+    const bannerDismissed = window.localStorage.getItem("powerprobe-hide-demo-banner");
+    if (!bannerDismissed) {
+      setShowDemoBanner(true);
+    }
+  }, []);
+
+  const handleDismissDemoBanner = () => {
+    window.localStorage.setItem("powerprobe-hide-demo-banner", "true");
+    setShowDemoBanner(false);
+  };
 
   const piConnected = Boolean(piStatus?.connected);
   const liveReadings = Array.isArray(liveStream) ? liveStream : [];
@@ -449,22 +485,28 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             td { color: #111827; }
             .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
             .section { break-inside: avoid; }
-            .report-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+            .report-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; page-break-inside: avoid; }
             .report-chart-card { break-inside: avoid; border: 1px solid #dbe3ef; border-radius: 8px; padding: 10px; }
             .report-chart-head { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; font-size: 12px; }
             .report-chart-head strong { color: #0f172a; }
             .report-chart-head span { color: #64748b; }
             .report-chart-card svg { width: 100%; height: auto; display: block; }
             .report-chart-card line { stroke: #cbd5e1; stroke-width: 1; }
+            .report-chart-card .report-chart-tick { stroke: #94a3b8; }
             .report-chart-card polyline { fill: none; stroke-width: 2.4; }
             .report-chart-card text { fill: #475569; font-size: 11px; font-weight: 700; }
+            .report-chart-card .report-chart-time { fill: #334155; font-size: 10px; }
             .report-chart-empty { border: 1px dashed #cbd5e1; border-radius: 8px; padding: 20px; color: #64748b; }
             .measurements-table { font-size: 10px; }
             .measurements-table th,
             .measurements-table td { padding: 5px 6px; }
             .note { padding: 10px 12px; border-left: 4px solid #1d4ed8; background: #eff6ff; color: #1e3a8a; font-size: 12px; }
             .footer { border-top: 1px solid #cbd5e1; padding-top: 10px; color: #64748b; font-size: 11px; }
-            @media print { .report-charts-grid { grid-template-columns: 1fr 1fr; } }
+            @media print {
+              .report-charts-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+              .section { page-break-inside: avoid; }
+              .measurements-table { page-break-before: auto; }
+            }
             @media print { button { display: none; } }
           </style>
         </head>
@@ -473,7 +515,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             <header class="report-header">
               <div>
                 <div class="brand">PowerProbe Dashboard Report</div>
-                <div class="subtitle">Battery telemetry, operational state, and configuration snapshot</div>
+                <div class="subtitle">Live battery telemetry, operating state, and applied test configuration</div>
               </div>
               <div class="meta">
                 <div>Generated: ${escapeHtml(generatedAt.toLocaleString())}</div>
@@ -500,7 +542,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
             </section>
 
             <section class="section">
-              <h2>Dashboard Charts</h2>
+              <h2>Metric Trends</h2>
               <div class="report-charts-grid">${reportChartHtml}</div>
             </section>
 
@@ -514,7 +556,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
               </table>
             </section>
 
-            <p class="note">This report is generated from the current PowerProbe dashboard state. Validate SOC, SOH, and RUL indicators against approved battery models before production use.</p>
+            <p class="note">This report reflects the dashboard state at export time. Validate SOC, SOH, and RUL indicators against approved battery models before production use.</p>
             <footer class="footer">PowerProbe | Team 6 | Internal battery analytics report</footer>
           </main>
           <script>
@@ -531,6 +573,19 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
 
   return (
     <section className="dashboard-page">
+      {showDemoBanner && (
+        <div className="demo-banner">
+          <div className="demo-banner-icon" aria-hidden="true">
+            <Play size={16} fill="currentColor" />
+          </div>
+          <div className="demo-banner-copy">
+            <strong>Quick start video</strong>
+            <p>See the dashboard flow, session setup, and history review in a short guided walkthrough.</p>
+          </div>
+          <a className="demo-banner-link" href="/help.html#video-demo" target="_blank" rel="noopener noreferrer">Watch demo</a>
+          <button onClick={handleDismissDemoBanner} title="Dismiss" type="button" aria-label="Dismiss quick start video notice"><X size={18} /></button>
+        </div>
+      )}
       <div className="dashboard-top-section">
         <div className="dashboard-title-area">
           <h1>Live Battery Dashboard</h1>
@@ -540,12 +595,13 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
           </span>
         </div>
 
-        <div className="dashboard-action-buttons">
+        <div className="dashboard-action-buttons" aria-label="Dashboard actions">
           <button
             className="btn-configuration"
             onClick={() => setChargeModalOpen(true)}
             title="Open configuration settings"
             type="button"
+            aria-label="Open battery configuration"
           >
             <Settings size={18} />
             Configuration
@@ -554,44 +610,50 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
           {isRunning && activeSessionId && (
             <button
               className="btn-export-pdf"
-              onClick={handleExportDashboardPdf}
-              title="Export dashboard report as PDF"
-              type="button"
-            >
+            onClick={handleExportDashboardPdf}
+            title="Export dashboard report as PDF"
+            type="button"
+            aria-label="Export dashboard report as PDF"
+          >
               <FileText size={18} />
               Export PDF
             </button>
           )}
 
-          <button
-            className={`btn-run ${isRunning && !controlPaused ? "active" : ""}`}
-            onClick={handleRun}
-            disabled={sessionPending || Boolean(activeSessionId) || isPiBusy}
-            type="button"
-          >
-            <Play size={16} fill="currentColor" />
-            {pendingAction === "start" ? "Starting..." : isPiBusy && !ownsVisibleSession ? "Pi busy" : "Run"}
-          </button>
+          <div className="session-control-group" aria-label="Session controls">
+            <button
+              className={`btn-run ${isRunning && !controlPaused ? "active" : ""}`}
+              onClick={handleRun}
+              disabled={sessionPending || Boolean(activeSessionId) || isPiBusy}
+              type="button"
+              aria-label="Start telemetry session"
+            >
+              <Play size={16} fill="currentColor" />
+              {pendingAction === "start" ? "Starting..." : isPiBusy && !ownsVisibleSession ? "Pi busy" : "Run"}
+            </button>
 
-          <button
-            className={`btn-pause ${controlPaused ? "active" : ""}`}
-            onClick={handlePause}
-            disabled={sessionPending || !ownsVisibleSession}
-            type="button"
-          >
-            <Pause size={16} />
-            {pendingAction === "pause" ? "Pausing..." : pendingAction === "resume" ? "Resuming..." : controlPaused ? "Resume" : "Pause"}
-          </button>
+            <button
+              className={`btn-pause ${controlPaused ? "active" : ""}`}
+              onClick={handlePause}
+              disabled={sessionPending || !ownsVisibleSession}
+              type="button"
+              aria-label={controlPaused ? "Resume telemetry session" : "Pause telemetry session"}
+            >
+              <Pause size={16} />
+              {pendingAction === "pause" ? "Pausing..." : pendingAction === "resume" ? "Resuming..." : controlPaused ? "Resume" : "Pause"}
+            </button>
 
-          <button
-            className="btn-stop"
-            onClick={handleStop}
-            disabled={sessionPending || !ownsVisibleSession}
-            type="button"
-          >
-            <Square size={16} fill="currentColor" />
-            {pendingAction === "stop" ? "Stopping..." : "Stop"}
-          </button>
+            <button
+              className="btn-stop"
+              onClick={handleStop}
+              disabled={sessionPending || !ownsVisibleSession}
+              type="button"
+              aria-label="Stop telemetry session"
+            >
+              <Square size={16} fill="currentColor" />
+              {pendingAction === "stop" ? "Stopping..." : "Stop"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -634,8 +696,8 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
 
       <div className="instrument-panel-header section-toggle-head">
         <div>
-          <h2>Instrument Panel</h2>
-          <p>Live battery telemetry diagnostics</p>
+          <h2>Live Metrics</h2>
+          <p>Realtime battery telemetry diagnostics</p>
         </div>
         <div className="section-header-actions">
           <span className={`status-badge ${activeLivePoint.status}`}>{statusLabel[activeLivePoint.status]}</span>
@@ -671,7 +733,7 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
       <section className="global-charts-section">
         <div className="global-charts-head section-toggle-head">
           <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
-            <h2>Global Telemetry</h2>
+            <h2>Metric Trends</h2>
           </div>
           <div className="section-header-actions">
             <button
@@ -689,8 +751,8 @@ function Dashboard({ livePoint, liveStream, selectedSession, activeBattery, acti
 
         {!globalChartsHidden && (
           <>
-        <div className="global-chart-toolbar" aria-label="Global chart type">
-          <span>Global chart type</span>
+        <div className="global-chart-toolbar" aria-label="Metric chart type">
+          <span>Chart style</span>
           <div className="global-chart-buttons">
             {GLOBAL_CHART_TYPES.map((type) => (
               <button

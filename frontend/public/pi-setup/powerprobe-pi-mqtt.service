@@ -1,0 +1,22 @@
+[Unit]
+Description=PowerProbe Raspberry Pi MQTT Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=team6
+WorkingDirectory=/home/team6/powerprobe
+Environment=POWERPROBE_MQTT_HOST=broker.emqx.io
+Environment=POWERPROBE_MQTT_PORT=1883
+Environment=POWERPROBE_MQTT_TOPIC_PREFIX=powerprobe/team6
+Environment=POWERPROBE_MQTT_PREFER_IPV4=true
+Environment=POWERPROBE_DEVICE_ID=pi-001
+Environment=POWERPROBE_BATTERY_ID=TEAM6_PACK_1
+Environment=POWERPROBE_STATE_FILE=/home/team6/powerprobe/latest_profile.json
+ExecStart=/home/team6/powerprobe/.venv/bin/python -u /home/team6/powerprobe/powerprobe_pi_mqtt.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

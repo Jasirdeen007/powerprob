@@ -84,7 +84,7 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
         </nav>
 
         <div className="header-actions">
-          <button type="button" className="header-theme-toggle" onClick={onToggleTheme} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+          <button type="button" className="header-theme-toggle" onClick={onToggleTheme} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
             {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
             <span>{theme === "dark" ? "Light" : "Dark"}</span>
           </button>
@@ -95,6 +95,7 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
               className="profile-button"
               onClick={() => setProfileMenuOpen((o) => !o)}
               aria-expanded={profileMenuOpen}
+              aria-label="Open user menu"
             >
               <User size={18} />
             </button>
@@ -124,7 +125,7 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
             )}
           </div>
 
-          <button type="button" className="mobile-menu-toggle mobile-only" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          <button type="button" className="mobile-menu-toggle mobile-only" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"} aria-expanded={mobileMenuOpen}>
             {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
@@ -166,7 +167,7 @@ function Header({ activePage, onPageChange, currentUser, onLogout, theme, onTogg
               <X size={18} />
             </button>
             <h2 id="powerprobe-help-title" className="sr-only">PowerProbe Help Documentation</h2>
-            <iframe className="help-modal-frame" src="/help.html" title="PowerProbe Help Documentation" />
+            <iframe className="help-modal-frame" src={`/help.html?theme=${theme}`} title="PowerProbe Help Documentation" />
           </section>
         </div>
       )}

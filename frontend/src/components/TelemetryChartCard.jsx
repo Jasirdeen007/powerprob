@@ -29,8 +29,8 @@ import {
   formatValueTick,
   getEvenTicksWithDomain,
   getTimeAxisExtent,
-  isScrolledNearEnd,
-  scrollChartToEnd,
+  isScrolledNearTime,
+  scrollChartToTime,
   SERIES_CLIP_PROPS,
   toYDomain,
   xAxisLabelProps,
@@ -40,7 +40,7 @@ import {
   Y_AXIS_TICK_STYLE,
   Y_AXIS_WIDTH
 } from "../lib/chartTicks";
-import { downloadCsv, downloadSvgChartPng, timestampForFile } from "../lib/exportUtils";
+import { downloadCsv, downloadMetricCardPng, timestampForFile } from "../lib/exportUtils";
 
 const capitalize = (s) => (typeof s === "string" && s.length ? s[0].toUpperCase() + s.slice(1) : s);
 
@@ -135,12 +135,16 @@ function TelemetryChartCard({
   focused = false
 }) {
   const chartRef = useRef(null);
+  const cardRef = useRef(null);
   const scrollRef = useRef(null);
   const followLatestRef = useRef(true);
   const hadActiveDataRef = useRef(false);
+  const programmaticScrollRef = useRef(false);
+  const scrollReleaseTimerRef = useRef(null);
   const options = useMemo(() => getChartOptionsForMetric(metricKey), [metricKey]);
   const defaultType = useMemo(() => getDefaultChartType(metricKey), [metricKey]);
   const [activeChart, setActiveChart] = useState(defaultType);
+  const [isInitialAnimation, setIsInitialAnimation] = useState(true);
 
   useEffect(() => {
     setActiveChart(getDefaultChartType(metricKey));
@@ -166,6 +170,15 @@ function TelemetryChartCard({
     }
     return mappedData;
   }, [data]);
+
+  useEffect(() => {
+    if (processedData.length > 0) {
+      const timer = setTimeout(() => setIsInitialAnimation(false), 50);
+      return () => clearTimeout(timer);
+    } else {
+      setIsInitialAnimation(true);
+    }
+  }, [processedData.length]);
   
   const hasActiveData = useMemo(() => hasMeaningfulTelemetry(processedData, metricKey), [metricKey, processedData]);
 
@@ -176,6 +189,7 @@ function TelemetryChartCard({
   const timeSeriesWidth = timeAxis.scrollWidth;
 
   const latestValue = processedData.length > 0 ? processedData.at(-1)?.[metricKey] ?? 0 : 0;
+  const latestTime = processedData.length > 0 ? processedData.at(-1)?.time ?? 0 : 0;
   const statusColor = getStatusColor(metricKey, latestValue);
   const isPercent = metricKey === "soc" || metricKey === "soh";
   const latestDisplay = `${latestValue.toFixed(isPercent ? 0 : 2)}${isPercent ? "%" : ` ${unit}`}`;
@@ -195,6 +209,24 @@ function TelemetryChartCard({
 
   const formatTick = (v) => formatValueTick(metricKey, v);
 
+  function pinChartToLatest() {
+    programmaticScrollRef.current = true;
+    if (scrollReleaseTimerRef.current) {
+      window.clearTimeout(scrollReleaseTimerRef.current);
+    }
+
+    const scrollNow = () => scrollChartToTime(scrollRef.current, latestTime, "auto");
+    scrollNow();
+    requestAnimationFrame(() => {
+      scrollNow();
+      requestAnimationFrame(scrollNow);
+    });
+
+    scrollReleaseTimerRef.current = window.setTimeout(() => {
+      programmaticScrollRef.current = false;
+    }, 180);
+  }
+
   useEffect(() => {
     if (!autoFollowLatest) {
       if (scrollRef.current) scrollRef.current.scrollLeft = 0;
@@ -210,25 +242,30 @@ function TelemetryChartCard({
     }
 
     if (!hadActiveDataRef.current) {
-      if (scrollRef.current) {
-        scrollRef.current.scrollLeft = 0;
-      }
       hadActiveDataRef.current = true;
       followLatestRef.current = true;
+      pinChartToLatest();
       return;
     }
 
     if (followLatestRef.current) {
-      scrollChartToEnd(scrollRef.current);
+      pinChartToLatest();
     }
-  }, [autoFollowLatest, domainMax, hasActiveData, processedData.length, timeSeriesWidth]);
+  }, [autoFollowLatest, domainMax, hasActiveData, latestTime, processedData.length, timeSeriesWidth]);
+
+  useEffect(() => () => {
+    if (scrollReleaseTimerRef.current) {
+      window.clearTimeout(scrollReleaseTimerRef.current);
+    }
+  }, []);
 
   function handleChartScroll(event) {
-    followLatestRef.current = autoFollowLatest && hasActiveData && isScrolledNearEnd(event.currentTarget);
+    if (programmaticScrollRef.current) return;
+    followLatestRef.current = autoFollowLatest && hasActiveData && isScrolledNearTime(event.currentTarget, latestTime);
   }
 
   function handleDownloadPng() {
-    downloadSvgChartPng(chartRef.current, `${metricKey}_chart_${timestampForFile()}.png`);
+    downloadMetricCardPng(cardRef.current, `${metricKey}_card_${timestampForFile()}.png`);
   }
 
   function handleDownloadCsv() {
@@ -317,7 +354,7 @@ function TelemetryChartCard({
 
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <ChartComponent data={processedData} margin={CHART_MARGIN}>
+        <ChartComponent data={processedData} margin={CHART_MARGIN} isAnimationActive={!isInitialAnimation}>
           <CartesianGrid clipPath="none" strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="time"
@@ -377,6 +414,7 @@ function TelemetryChartCard({
   return (
     <div
       className={`telemetry-chart-card panel ${compact ? "compact" : ""} ${focused ? "focused" : ""}`}
+      ref={cardRef}
       style={{ minWidth: 0 }}
       onClick={(event) => {
         if (!onSelectChart) return;
