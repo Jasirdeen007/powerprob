@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.vite/
 # Local environment and Firebase credentials
 .env
 .env.local

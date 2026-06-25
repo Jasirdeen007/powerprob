@@ -2,6 +2,34 @@
   command = "npm run build"
   publish = "dist"
 
+[[headers]]
+  for = "/pi-setup/powerprobe_pi_mqtt.py"
+  [headers.values]
+    Content-Type = "text/x-python; charset=utf-8"
+    Content-Disposition = "attachment; filename=\"powerprobe_pi_mqtt.py\""
+
+[[headers]]
+  for = "/pi-setup/powerprobe-pi-mqtt.service"
+  [headers.values]
+    Content-Type = "text/plain; charset=utf-8"
+    Content-Disposition = "attachment; filename=\"powerprobe-pi-mqtt.service\""
+
+[[headers]]
+  for = "/pi-setup/README.txt"
+  [headers.values]
+    Content-Type = "text/plain; charset=utf-8"
+    Content-Disposition = "attachment; filename=\"README.txt\""
+
+[[redirects]]
+  from = "/help.html"
+  to = "/help.html"
+  status = 200
+
+[[redirects]]
+  from = "/pi-setup/*"
+  to = "/pi-setup/:splat"
+  status = 200
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

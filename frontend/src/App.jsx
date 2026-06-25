@@ -232,7 +232,13 @@ function App() {
   const [authError, setAuthError] = useState("");
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [profiles, setProfiles] = useState([]);
-  const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem("powerprobe-theme") || "light";
+    } catch (_) {
+      return "light";
+    }
+  });
   const [piStatus, setPiStatus] = useState({
     connected: false,
     transport: "websocket",
@@ -266,6 +272,11 @@ function App() {
       document.documentElement.setAttribute("data-theme", "dark");
     } else {
       document.documentElement.removeAttribute("data-theme");
+    }
+    try {
+      localStorage.setItem("powerprobe-theme", theme);
+    } catch (_) {
+      // Ignore storage failures in private or restricted browser modes.
     }
   }, [theme]);
 
