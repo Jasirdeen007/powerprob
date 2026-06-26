@@ -1,0 +1,17 @@
+[Unit]
+Description=PowerProbe UART-MQTT Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=predator
+WorkingDirectory=/home/predator/powerprobe
+ExecStart=/usr/bin/python3 /home/predator/powerprobe/pi_bridge.py --serial-port /dev/ttyS0
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

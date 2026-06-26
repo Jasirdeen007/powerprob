@@ -114,13 +114,63 @@ class MqttService:
             if not parsed:
                 return
             device_id, kind = parsed
-            payload = json.loads(message.payload.decode("utf-8") or "{}")
-            if kind == "status":
-                self.record_status(device_id, payload)
-            elif kind == "telemetry":
+            raw = message.payload.decode("utf-8") or ""
+            if kind == "telemetry":
+                payload = self._parse_telemetry_payload(raw, device_id)
+                if payload is None:
+                    return
                 self.record_telemetry(device_id, payload)
+            else:
+                payload = json.loads(raw or "{}")
+                self.record_status(device_id, payload)
         except Exception as error:
             logger.warning("Failed to process MQTT message topic=%s: %s", message.topic, error)
+
+    def _parse_telemetry_payload(self, raw: str, device_id: str) -> dict[str, Any] | None:
+        raw = raw.strip()
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return self._parse_csv_telemetry(raw, device_id)
+
+    def _parse_csv_telemetry(self, raw: str, device_id: str) -> dict[str, Any] | None:
+        """Parse Pi CSV telemetry: timestamp,current,pack_voltage,mosfet_temp,battery_temp"""
+        parts = [p.strip() for p in raw.split(",")]
+        if len(parts) < 5:
+            logger.debug("Ignoring short CSV line from %s: %s", device_id, raw)
+            return None
+        try:
+            timestamp_str = parts[0]
+            current_a = float(parts[1])
+            pack_voltage = float(parts[2])
+            mosfet_temp = float(parts[3])
+            battery_temp = float(parts[4])
+        except (ValueError, IndexError):
+            logger.debug("Ignoring unparseable CSV from %s: %s", device_id, raw)
+            return None
+        state = self.devices.get(device_id)
+        session_id = str((state.status.get("active_session_id") or "") if state else "")
+        user_id = str((state.status.get("user_id") or "") if state else "")
+        if not session_id:
+            logger.debug("No active session for device=%s, ignoring CSV telemetry", device_id)
+            return None
+        return {
+            "session_id": session_id,
+            "user_id": user_id or None,
+            "timestamp": timestamp_str,
+            "mode": "DISCHARGE",
+            "pack_voltage": pack_voltage,
+            "current": current_a,
+            "temperature": {
+                "battery": battery_temp,
+                "mosfet": mosfet_temp,
+                "ambient": 25.0,
+            },
+            "event": "",
+        }
 
     def record_status(self, device_id: str, payload: dict[str, Any]) -> None:
         state = self.devices.setdefault(device_id, DeviceState(device_id=device_id))
