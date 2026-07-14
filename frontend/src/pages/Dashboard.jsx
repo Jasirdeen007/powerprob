@@ -164,7 +164,7 @@ function buildReportLineChart(readings, metricKey, label, unit, color = "#2563eb
   `;
 }
 
-function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery, activeSession = {}, profiles = [], onStartSession, onEndSession, onPauseSession, piStatus, userId }) {
+function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery, activeSession = {}, profiles = [], onStartSession, onEndSession, onPauseSession, piStatus, userId, currentUser }) {
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [chargeConfigModalOpen, setChargeConfigModalOpen] = useState(false);
   const [operationMode, setOperationMode] = useState("discharge");
@@ -226,9 +226,11 @@ function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery
   const visibleDeviceState = piStatus?.devices?.[visibleDeviceId]?.status?.state
     ?? deviceEntries.find(([, device]) => device?.active_session_id === visibleSessionId)?.[1]?.status?.state
     ?? "";
-  const isEsp32Busy = Boolean(visibleSessionId) && esp32Connected;
   const ownsVisibleSession = Boolean(activeSessionId && activeSessionId === visibleSessionId);
   const reportedEsp32Paused = String(visibleDeviceState).toLowerCase() === "paused";
+  const piReportsActiveSession = ["running", "paused"].includes(String(visibleDeviceState).toLowerCase());
+  const hasConnectedPiSession = Boolean(visibleSessionId && esp32Connected && piReportsActiveSession);
+  const isEsp32Busy = hasConnectedPiSession;
   const isEsp32Paused = ownsVisibleSession ? Boolean(isPaused) : reportedEsp32Paused;
   const controlPaused = Boolean(ownsVisibleSession ? isPaused : isEsp32Paused);
   const activeSessionReadings = visibleSessionId
@@ -317,23 +319,23 @@ function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery
   const tone = temperatureTone === "danger" ? "danger" : temperatureTone === "warn" ? "warn" : "good";
   const Esp32StatusIcon = esp32Connected ? Wifi : WifiOff;
   const esp32StatusLabel = hasEsp32Telemetry
-    ? "ESP32 data receiving"
+    ? "Pi data receiving"
     : isEsp32Paused
-      ? "ESP32 paused"
+      ? "Pi paused"
       : isEsp32Busy
-        ? "ESP32 in use"
+        ? "Pi in use"
         : esp32Connected
-          ? "ESP32 available"
-          : "ESP32 unavailable";
+          ? "Pi available"
+          : "Pi unavailable";
   const esp32StatusDetail = hasEsp32Telemetry
     ? "Live telemetry is updating the dashboard"
     : isEsp32Paused
       ? "Telemetry is paused for the active session"
       : isEsp32Busy
-        ? `Session ${visibleSessionId} is using ${visibleDeviceId || "the ESP32"}`
+       ? `Session ${visibleSessionId} is using ${visibleDeviceId || "the Pi"}`
     : esp32Connected
-      ? "ESP32 is connected, waiting for telemetry packets"
-      : "Waiting for ESP32 telemetry bridge";
+      ? "Pi is connected, waiting for telemetry packets"
+      : "Waiting for Pi telemetry bridge";
 
   const profileDescriptions = {
     "Surveillance Drone": "Surveillance Drone: Hover, camera sweep, return, and controlled landing",
@@ -425,11 +427,7 @@ function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery
       ? readings
       : (selectedSession?.readings?.length ? selectedSession.readings : readings);
     const latestReportPoint = reportReadings.at(-1) ?? activeLivePoint;
-    const reportStatus = activeSessionId
-      ? (controlPaused ? "Paused" : "Running")
-      : selectedSession?.status
-        ? selectedSession.status
-        : "Snapshot";
+    const reportUserName = currentUser?.name || currentUser?.email || userId || "________________";
     const generatedAt = new Date();
     const configRows = dashboardConfig.fields
       .map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`)
@@ -471,19 +469,21 @@ function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery
           <style>
             @page { size: A4; margin: 16mm; }
             * { box-sizing: border-box; }
-            body { margin: 0; color: #111827; font-family: Arial, Helvetica, sans-serif; line-height: 1.45; }
-            .report { display: grid; gap: 18px; }
+            body { margin: 0; color: #111827; font-family: "Segoe UI", Arial, Helvetica, sans-serif; line-height: 1.45; letter-spacing: 0.01em; }
+            .report { position: relative; display: grid; gap: 18px; }
+            .watermark { position: fixed; z-index: 0; top: 50%; left: 50%; width: 360px; transform: translate(-50%, -50%); opacity: 0.07; pointer-events: none; }
+            .report > *:not(.watermark) { position: relative; z-index: 1; }
             .report-header { display: flex; justify-content: space-between; gap: 20px; border-bottom: 3px solid #1d4ed8; padding-bottom: 14px; }
             .brand { font-size: 24px; font-weight: 800; color: #0f172a; }
             .subtitle { margin-top: 4px; color: #475569; font-size: 13px; }
             .meta { text-align: right; font-size: 12px; color: #475569; }
-            .status-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+            .status-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
             .status-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; background: #f8fafc; }
             .status-card span { display: block; color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; }
             .status-card strong { display: block; margin-top: 4px; color: #111827; font-size: 14px; }
             h2 { margin: 0 0 8px; font-size: 15px; color: #0f172a; }
             table { width: 100%; border-collapse: collapse; font-size: 12px; }
-            th, td { border: 1px solid #dbe3ef; padding: 8px; text-align: left; }
+            th, td { border: 1px solid #dbe3ef; padding: 8px; text-align: left; vertical-align: top; }
             th { background: #eff6ff; color: #1e3a8a; font-weight: 800; }
             td { color: #111827; }
             .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -504,7 +504,11 @@ function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery
             .measurements-table th,
             .measurements-table td { padding: 5px 6px; }
             .note { padding: 10px 12px; border-left: 4px solid #1d4ed8; background: #eff6ff; color: #1e3a8a; font-size: 12px; }
-            .footer { border-top: 1px solid #cbd5e1; padding-top: 10px; color: #64748b; font-size: 11px; }
+            .approval { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 14px; margin-top: 20px; padding-top: 14px; border-top: 1px solid #cbd5e1; }
+            .approval-item { min-height: 46px; border-bottom: 1px solid #94a3b8; padding: 6px 2px; }
+            .approval-item span { display: block; color: #64748b; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+            .approval-item strong { display: block; margin-top: 8px; color: #111827; font-size: 12px; font-weight: 600; }
+            .footer { border-top: 0; padding-top: 8px; color: #64748b; font-size: 11px; }
             @media print {
               .report-charts-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
               .section { page-break-inside: avoid; }
@@ -513,24 +517,23 @@ function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery
             @media print { button { display: none; } }
           </style>
         </head>
-        <body>
-          <main class="report">
-            <header class="report-header">
+         <body>
+           <main class="report">
+             <img class="watermark" src="${window.location.origin}/powerprobe-logo-watermark.png" alt="" />
+             <header class="report-header">
               <div>
                 <div class="brand">PowerProbe Dashboard Report</div>
                 <div class="subtitle">Live battery telemetry, operating state, and applied test configuration</div>
               </div>
               <div class="meta">
                 <div>Generated: ${escapeHtml(generatedAt.toLocaleString())}</div>
-                <div>Report Type: Dashboard PDF Export</div>
+                <div>Configuration report</div>
               </div>
             </header>
 
             <section class="status-strip">
               <div class="status-card"><span>Session</span><strong>${escapeHtml(visibleSessionId || selectedSession?.sessionId || "No active session")}</strong></div>
-              <div class="status-card"><span>Status</span><strong>${escapeHtml(reportStatus)}</strong></div>
-              <div class="status-card"><span>Battery</span><strong>${escapeHtml(activeBattery || selectedSession?.batteryId || "Unknown")}</strong></div>
-              <div class="status-card"><span>Source</span><strong>${escapeHtml(hasEsp32Telemetry ? "ESP32" : selectedSession?.sourceFile || "Dashboard snapshot")}</strong></div>
+              <div class="status-card"><span>battery_id</span><strong>${escapeHtml(activeBattery || selectedSession?.batteryId || "Unknown")}</strong></div>
             </section>
 
             <section class="two-col">
@@ -560,7 +563,13 @@ function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery
             </section>
 
             <p class="note">This report reflects the dashboard state at export time. Validate SOC, SOH, and RUL indicators against approved battery models before production use.</p>
-            <footer class="footer">PowerProbe | Team 6 | Internal battery analytics report</footer>
+            <section class="approval">
+              <div class="approval-item"><span>User name</span><strong>${escapeHtml(reportUserName)}</strong></div>
+              <div class="approval-item"><span>Test engineer</span><strong>&nbsp;</strong></div>
+              <div class="approval-item"><span>Signature</span><strong>&nbsp;</strong></div>
+              <div class="approval-item"><span>Date</span><strong>${escapeHtml(generatedAt.toLocaleDateString())}</strong></div>
+            </section>
+            <footer class="footer">PowerProbe battery analytics report</footer>
           </main>
           <script>
             window.onload = () => {
@@ -572,6 +581,11 @@ function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery
       </html>
     `);
     reportWindow.document.close();
+    try {
+      reportWindow.history.replaceState({}, "", window.location.href);
+    } catch (_) {
+      // The browser may restrict history updates for a print window.
+    }
   };
 
   return (
@@ -632,7 +646,7 @@ function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery
               aria-label="Start telemetry session"
             >
               <Play size={16} fill="currentColor" />
-              {pendingAction === "start" ? "Starting..." : isEsp32Busy && !ownsVisibleSession ? "ESP32 busy" : "Run"}
+              {pendingAction === "start" ? "Starting..." : isEsp32Busy && !ownsVisibleSession ? "Pi busy" : "Run"}
             </button>
 
             <button
@@ -666,9 +680,9 @@ function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery
         </div>
       )}
 
-      {visibleSessionId && (
+      {hasConnectedPiSession && (
         <div className="session-info">
-          <p>{ownsVisibleSession ? "Active session" : "ESP32 in use"}: <strong>{visibleSessionId}</strong></p>
+            <p>{ownsVisibleSession ? "Active session" : "Pi in use"}: <strong>{visibleSessionId}</strong></p>
         </div>
       )}
 
@@ -687,7 +701,7 @@ function Dashboard({ data, livePoint, liveStream, selectedSession, activeBattery
         </div>
       </section>
 
-      <section className={`pi-status-banner ${esp32Connected ? "connected" : "unavailable"}`} aria-label="ESP32 connection status">
+      <section className={`pi-status-banner ${esp32Connected ? "connected" : "unavailable"}`} aria-label="Pi connection status">
         <div className="pi-status-main">
           <Esp32StatusIcon size={22} aria-hidden="true" />
           <div>

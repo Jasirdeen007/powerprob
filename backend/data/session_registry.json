@@ -242,6 +242,146 @@
     },
     "user_id": "cBPz3zgfFcM0ZgLnOk4lEBpuzSt2"
   },
+  "SESSION_20260714_193225_B0047": {
+    "session": {
+      "battery_id": "B0047",
+      "battery_name": "",
+      "config": {
+        "capacity_ah": 2.2,
+        "cell_count": 3,
+        "chemistry": "Li-ion",
+        "discharge_profile": "PULSE",
+        "drone_type": "Surveillance Drone"
+      },
+      "device_id": "esp32-001",
+      "ended_at": "2026-07-14T19:32:28.533995+00:00",
+      "session_id": "SESSION_20260714_193225_B0047",
+      "started_at": "2026-07-14T19:32:25.835071+00:00",
+      "status": "completed",
+      "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+    },
+    "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+  },
+  "SESSION_20260714_193241_B0047": {
+    "session": {
+      "battery_id": "B0047",
+      "battery_name": "",
+      "config": {
+        "capacity_ah": 2.2,
+        "cell_count": 3,
+        "chemistry": "Li-ion",
+        "discharge_profile": "PULSE",
+        "drone_type": "Surveillance Drone"
+      },
+      "device_id": "esp32-001",
+      "ended_at": null,
+      "session_id": "SESSION_20260714_193241_B0047",
+      "started_at": "2026-07-14T19:32:41.741442+00:00",
+      "status": "running",
+      "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+    },
+    "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+  },
+  "SESSION_20260714_194323_B0047": {
+    "session": {
+      "battery_id": "B0047",
+      "battery_name": "",
+      "config": {
+        "capacity_ah": 2.2,
+        "cell_count": 3,
+        "chemistry": "Li-ion",
+        "discharge_profile": "PULSE",
+        "drone_type": "Surveillance Drone"
+      },
+      "device_id": "esp32-001",
+      "ended_at": "2026-07-14T19:47:17.079015+00:00",
+      "session_id": "SESSION_20260714_194323_B0047",
+      "started_at": "2026-07-14T19:43:23.619822+00:00",
+      "status": "interrupted",
+      "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+    },
+    "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+  },
+  "SESSION_20260714_194419_B0047": {
+    "session": {
+      "battery_id": "B0047",
+      "battery_name": "",
+      "config": {
+        "capacity_ah": 2.2,
+        "cell_count": 3,
+        "chemistry": "Li-ion",
+        "discharge_profile": "PULSE",
+        "drone_type": "Surveillance Drone"
+      },
+      "device_id": "esp32-001",
+      "ended_at": "2026-07-14T19:47:17.180785+00:00",
+      "session_id": "SESSION_20260714_194419_B0047",
+      "started_at": "2026-07-14T19:44:19.507558+00:00",
+      "status": "interrupted",
+      "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+    },
+    "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+  },
+  "SESSION_20260714_194748_B0047": {
+    "session": {
+      "battery_id": "B0047",
+      "battery_name": "",
+      "config": {
+        "capacity_ah": 2.2,
+        "cell_count": 3,
+        "chemistry": "Li-ion",
+        "discharge_profile": "PULSE",
+        "drone_type": "Surveillance Drone"
+      },
+      "device_id": "esp32-001",
+      "ended_at": "2026-07-14T19:48:26.338009+00:00",
+      "session_id": "SESSION_20260714_194748_B0047",
+      "started_at": "2026-07-14T19:47:48.378124+00:00",
+      "status": "completed",
+      "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+    },
+    "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+  },
+  "SESSION_20260714_195509_B0047": {
+    "session": {
+      "battery_id": "B0047",
+      "battery_name": "",
+      "config": {
+        "capacity_ah": 2.2,
+        "cell_count": 3,
+        "chemistry": "Li-ion",
+        "discharge_profile": "PULSE",
+        "drone_type": "Surveillance Drone"
+      },
+      "device_id": "esp32-001",
+      "ended_at": "2026-07-14T19:59:44.429167+00:00",
+      "session_id": "SESSION_20260714_195509_B0047",
+      "started_at": "2026-07-14T19:55:09.399969+00:00",
+      "status": "interrupted",
+      "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+    },
+    "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+  },
+  "SESSION_20260714_195946_B0047": {
+    "session": {
+      "battery_id": "B0047",
+      "battery_name": "",
+      "config": {
+        "capacity_ah": 2.2,
+        "cell_count": 3,
+        "chemistry": "Li-ion",
+        "discharge_profile": "PULSE",
+        "drone_type": "Surveillance Drone"
+      },
+      "device_id": "esp32-001",
+      "ended_at": null,
+      "session_id": "SESSION_20260714_195946_B0047",
+      "started_at": "2026-07-14T19:59:46.742574+00:00",
+      "status": "running",
+      "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+    },
+    "user_id": "0Sb93ew38YMm1SMFC6a0ibI6OGt2"
+  },
   "SESSION_STATUS_OWNER_TEAM6_PACK_1": {
     "session": {
       "session_id": "SESSION_STATUS_OWNER_TEAM6_PACK_1",

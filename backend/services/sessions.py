@@ -101,7 +101,7 @@ async def start_session(request: SessionStartRequest) -> dict:
         raise HTTPException(
             status_code=409,
             detail={
-                "message": "The ESP32 is already running another session.",
+                "message": "The Pi is already running another session.",
                 "device_id": error.device_id,
                 "active_session_id": error.active_session_id,
             },
@@ -140,9 +140,9 @@ async def start_session(request: SessionStartRequest) -> dict:
         raise HTTPException(
             status_code=503,
             detail={
-                "message": "Could not send START_PROFILE to the ESP32.",
+                "message": "Could not send START_PROFILE to the Pi.",
                 "device_id": device_id,
-                "hint": "Check /esp32/status, ESP32 serial logs, and access to broker.emqx.io:1883.",
+                "hint": "Check /esp32/status, Pi service logs, and access to broker.emqx.io:1883.",
             },
         )
     logger.info(
@@ -185,9 +185,9 @@ async def end_session(request: SessionEndRequest) -> dict:
         raise HTTPException(
             status_code=503,
             detail={
-                "message": "Could not send STOP_PROFILE to the ESP32.",
+                "message": "Could not send STOP_PROFILE to the Pi.",
                 "device_id": device_id,
-                "hint": "Session was left running so you can retry Stop after MQTT reconnects.",
+                "hint": "Session was left running so you can retry Stop after the MQTT connection is restored.",
             },
         )
 

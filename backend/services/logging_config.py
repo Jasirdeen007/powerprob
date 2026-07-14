@@ -4,7 +4,10 @@ from pathlib import Path
 
 
 def setup_logging():
-    log_dir = Path(__file__).resolve().parents[1] / "logs"
+    # Keep the application log outside the directory watched by uvicorn
+    # --reload. Writing backend/logs/backend.log causes the reloader to
+    # restart continuously while the application is serving requests.
+    log_dir = Path(__file__).resolve().parents[2] / "logs"
     log_dir.mkdir(exist_ok=True)
 
     formatter = logging.Formatter(

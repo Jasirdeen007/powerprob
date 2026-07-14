@@ -41,6 +41,7 @@ class MqttService:
         self.devices: dict[str, DeviceState] = {}
         self.session_devices: dict[str, str] = {}
         self.device_sessions: dict[str, str] = {}
+        self.session_reserved_at: dict[str, float] = {}
         self.unknown_sessions_stopped: set[tuple[str, str]] = set()
         self.broker_host = settings.mqtt_host
         self.topic_prefix = settings.mqtt_topic_prefix
@@ -302,6 +303,7 @@ class MqttService:
 
         self.session_devices[session_id] = resolved
         self.device_sessions[resolved] = session_id
+        self.session_reserved_at[session_id] = time.time()
         return resolved
 
     def set_active_session(self, session_id: str, device_id: str | None = None) -> str:
@@ -309,6 +311,7 @@ class MqttService:
 
     def clear_active_session(self, session_id: str) -> None:
         device_id = self.session_devices.pop(session_id, None)
+        self.session_reserved_at.pop(session_id, None)
         if device_id and self.device_sessions.get(device_id) == session_id:
             self.device_sessions.pop(device_id, None)
         self.unknown_sessions_stopped = {
@@ -319,10 +322,23 @@ class MqttService:
         local_session_id = self.device_sessions.get(device_id)
         state = self.devices.get(device_id)
         if not state:
-            return local_session_id
+            # A mapping restored in a long-running backend can outlive the
+            # device status that created it. Only a freshly reserved mapping
+            # may block a new session when no live Pi status is available.
+            reserved_at = self.session_reserved_at.get(local_session_id or "", 0)
+            if local_session_id and reserved_at and time.time() - reserved_at <= settings.mqtt_heartbeat_stale_seconds:
+                return local_session_id
+            if local_session_id:
+                self.clear_active_session(local_session_id)
+            return None
         if not self._is_fresh(state.last_seen):
             return None
         if local_session_id:
+            reported_state = str(state.status.get("state", "")).lower()
+            reported_session_id = str(state.status.get("active_session_id") or "")
+            if reported_state == "idle" and not reported_session_id:
+                self.clear_active_session(local_session_id)
+                return None
             return local_session_id
 
         reported_session_id = state.status.get("active_session_id")
@@ -363,12 +379,12 @@ class MqttService:
         }
         active_session_devices = {
             session_id: device_id
-            for session_id, device_id in self.session_devices.items()
+            for session_id, device_id in list(self.session_devices.items())
             if self.active_session_for_device(device_id) == session_id
         }
         active_device_sessions = {
             device_id: session_id
-            for device_id, session_id in self.device_sessions.items()
+            for device_id, session_id in list(self.device_sessions.items())
             if self.active_session_for_device(device_id) == session_id
         }
         fresh_telemetry = any(

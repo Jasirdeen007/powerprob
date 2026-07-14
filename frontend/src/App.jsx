@@ -413,8 +413,21 @@ function App() {
               return current;
             }
             if (current.createdAt && Date.now() - current.createdAt < 10000) return current;
+            const currentDeviceStatus = current.deviceId
+              ? status?.devices?.[current.deviceId]?.status
+              : undefined;
+            const deviceExplicitlyIdle = Boolean(current.deviceId)
+              && String(currentDeviceStatus?.state ?? "").toLowerCase() === "idle"
+              && !currentDeviceStatus?.active_session_id;
             const sessionConfirmed = activeSessionIds.has(current.sessionId) && anyDeviceFresh;
             if (sessionConfirmed) {
+              statusMissCountRef.current = 0;
+              return current;
+            }
+            // Background tabs can delay polling. Do not treat a temporary
+            // status gap as a stopped Pi session; only an explicit idle
+            // status is authoritative for clearing the local controls.
+            if (!deviceExplicitlyIdle) {
               statusMissCountRef.current = 0;
               return current;
             }
@@ -433,11 +446,9 @@ function App() {
             transport: "mqtt",
             endpoint: "/esp32/status"
           });
-          statusMissCountRef.current += 1;
-          if (statusMissCountRef.current >= 3) {
-            statusMissCountRef.current = 0;
-            setActiveRun({ sessionId: "", deviceId: "", isRunning: false, isPaused: false, createdAt: 0 });
-          }
+          // Keep the active session across temporary backend polling errors.
+          // The next successful Pi status or an explicit Stop will reconcile it.
+          statusMissCountRef.current = 0;
         }
       }
     }
@@ -772,6 +783,27 @@ function App() {
       isRunning: false,
       isPaused: false
     });
+    setPiStatus((current) => ({
+      ...current,
+      active_sessions: Object.fromEntries(
+        Object.entries(current?.active_sessions ?? {}).filter(([id]) => id !== sessionId)
+      ),
+      device_sessions: Object.fromEntries(
+        Object.entries(current?.device_sessions ?? {}).filter(([, id]) => id !== sessionId)
+      ),
+      devices: Object.fromEntries(
+        Object.entries(current?.devices ?? {}).map(([id, device]) => (
+          device?.active_session_id === sessionId
+            ? [id, {
+              ...device,
+              busy: false,
+              active_session_id: null,
+              status: { ...(device.status ?? {}), state: "idle", active_session_id: null }
+            }]
+            : [id, device]
+        ))
+      )
+    }));
     return response;
   }
 
@@ -853,7 +885,7 @@ function App() {
       />
       <main className="app-content">
         {activePage === "dashboard" && (
-          <Dashboard
+            <Dashboard
             data={data}
             livePoint={livePoint}
             liveStream={live.stream}
@@ -864,9 +896,10 @@ function App() {
             onStartSession={handleStartSession}
             onEndSession={handleEndSession}
             onPauseSession={handlePauseSession}
-            piStatus={piStatus}
-            userId={userId}
-          />
+              piStatus={piStatus}
+              userId={userId}
+              currentUser={currentUser}
+            />
         )}
         {activePage === "traceability" && (
           <HistoryAnalytics data={data} selectedBattery={selectedBattery} onBatteryChange={setSelectedBattery} />
