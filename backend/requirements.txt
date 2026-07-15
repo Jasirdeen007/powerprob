@@ -1,6 +1,7 @@
 fastapi
 uvicorn[standard]
 pydantic
+email-validator
 python-dotenv
 firebase-admin
 paho-mqtt
